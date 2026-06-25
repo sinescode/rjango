@@ -157,15 +157,39 @@
 
 ## 📋 Gap Analysis (What's Next)
 
-| Feature | Priority | Notes |
-|---------|----------|-------|
-| **Database-backed ORM CRUD** | High | sqlx integration exists, needs real INSERT/SELECT tests |
-| **HTTPS support** | Medium | TLS via rustls |
-| **ASGI/WSGI compatibility** | Medium | Run behind uvicorn/gunicorn |
-| **Email sending** | Low | SMTP backend |
-| **Caching framework** | Low | memcached/redis backends |
-| **Internationalization (i18n) in templates** | Low | `{% trans %}` tag etc. |
-| **Static files in development** | Low | `{% static %}` tag |
+> **Full analysis:** [`reports/gap-analysis.md`](reports/gap-analysis.md) — 1,100+ Django APIs analyzed across 30 categories
+
+### 🔥 Top 5 Priority Gaps
+
+| # | Feature | Est. Effort | Reason |
+|---|---------|-------------|--------|
+| 1 | **`reverse()` URL resolver** | Medium | Needed by templates, admin, redirects, tests |
+| 2 | **Database CRUD operations** | High | QuerySet can't execute SQL (get/create/update/delete/save) |
+| 3 | **Full lookup types** (gt, gte, lt, lte, in, contains, etc.) | Medium | Only exact match filter exists |
+| 4 | **15+ missing field types** | Low | Decimal, UUID, Duration, Email, URL, Slug, IP, Time, etc. |
+| 5 | **Caching framework** | Medium | 7 backends — completely missing |
+
+### ⚡ Quick Wins (Low Effort, High Value)
+
+| Feature | Est. Lines | Impact |
+|---------|-----------|--------|
+| `{% url %}` template tag | 60 | Enables template URL resolution |
+| `{% include %}` template tag | 30 | Template composition |
+| Missing settings (MIDDLEWARE, TEMPLATES, etc.) | 100 | Better framework config |
+| Password validation system | 100 | Django security baseline |
+| assertContains / assertTemplateUsed | 80 | Better test assertions |
+
+### Detailed Reports
+
+| Report | File |
+|--------|------|
+| Core & Utils | `reports/django-core-features.md` |
+| ORM (full spectrum) | `reports/django-orm-features.md` |
+| Templates (filters + tags) | `reports/django-templates-features.md` |
+| Forms, Auth, Middleware | `reports/django-forms-auth-middleware-features.md` |
+| URLs, Views, Test Framework | `reports/django-urls-views-test-features.md` |
+| Contrib Packages | `reports/django-contrib-features.md` |
+| **Master Gap Analysis** | **`reports/gap-analysis.md`** |
 
 ---
 
