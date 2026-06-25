@@ -29,3 +29,34 @@ pub fn run(static_root: &str, static_dirs: &[String]) {
     
     println!("{} static file(s) copied to '{}'.", copied, static_root);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_collectstatic_empty_dirs() {
+        let dir = std::env::temp_dir().join("_rjango_test_static_out");
+        let _ = fs::remove_dir_all(&dir);
+        run(dir.to_str().unwrap(), &[]);
+        assert!(dir.exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_collectstatic_with_source_dir() {
+        let out_dir = std::env::temp_dir().join("_rjango_test_static_out2");
+        let src_dir = std::env::temp_dir().join("_rjango_test_static_src");
+        let _ = fs::remove_dir_all(&out_dir);
+        let _ = fs::remove_dir_all(&src_dir);
+        fs::create_dir_all(&src_dir).unwrap();
+        fs::write(src_dir.join("style.css"), "body {}").unwrap();
+
+        run(out_dir.to_str().unwrap(), &[src_dir.to_str().unwrap().to_string()]);
+        assert!(out_dir.join("style.css").exists());
+
+        let _ = fs::remove_dir_all(&out_dir);
+        let _ = fs::remove_dir_all(&src_dir);
+    }
+}

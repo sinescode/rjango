@@ -34,6 +34,25 @@ pub fn run(database_url: &str) {
     println!("  Applied {} migration(s).", pending.len());
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_migrate_sqlite() {
+        super::run("sqlite://test.db");
+    }
+
+    #[test]
+    fn test_migrate_postgres() {
+        super::run("postgresql://localhost/test");
+    }
+
+    #[test]
+    fn test_load_migrations_not_empty() {
+        let migrations = super::load_migrations();
+        assert!(!migrations.is_empty());
+    }
+}
+
 /// Load migration definitions from registered apps.
 fn load_migrations() -> Vec<Migration> {
     let mut migrations = Vec::new();

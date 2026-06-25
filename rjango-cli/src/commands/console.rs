@@ -16,3 +16,12 @@ pub fn run() {
         println!("  (not yet connected)");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_console_function_exists() {
+        // Verify the run function compiles and is accessible
+        let _ = super::run;
+    }
+}

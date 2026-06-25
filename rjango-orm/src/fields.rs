@@ -163,3 +163,112 @@ impl Field for SimpleField {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DatabaseBackend;
+
+    #[test]
+    fn test_simple_field_new() {
+        let f = SimpleField::new("id", FieldTypes::AutoField);
+        assert_eq!(f.name(), "id");
+        assert_eq!(f.field_type(), FieldTypes::AutoField);
+        assert!(f.is_pk());
+        assert!(!f.is_null());
+        assert!(!f.is_unique());
+    }
+
+    #[test]
+    fn test_field_optional_attrs() {
+        let f = SimpleField::new("name", FieldTypes::CharField)
+            .null()
+            .unique()
+            .max_length(100)
+            .default(Value::String("default".into()));
+        assert!(f.is_null());
+        assert!(f.is_unique());
+        assert_eq!(Field::default(&f), Some(Value::String("default".into())));
+    }
+
+    #[test]
+    fn test_sql_types() {
+        assert_eq!(FieldTypes::AutoField.sql_type(&DatabaseBackend::SQLite), "INTEGER");
+        assert_eq!(FieldTypes::TextField.sql_type(&DatabaseBackend::SQLite), "TEXT");
+        assert_eq!(FieldTypes::IntegerField.sql_type(&DatabaseBackend::SQLite), "INTEGER");
+        assert_eq!(FieldTypes::FloatField.sql_type(&DatabaseBackend::SQLite), "REAL");
+        assert_eq!(FieldTypes::BooleanField.sql_type(&DatabaseBackend::SQLite), "INTEGER");
+        assert_eq!(FieldTypes::BinaryField.sql_type(&DatabaseBackend::SQLite), "BLOB");
+        assert_eq!(FieldTypes::ForeignKey.sql_type(&DatabaseBackend::SQLite), "INTEGER");
+    }
+
+    #[test]
+    fn test_validate_null_disallowed() {
+        let f = SimpleField::new("name", FieldTypes::CharField);
+        assert!(f.validate(&Value::Null).is_err());
+    }
+
+    #[test]
+    fn test_validate_null_allowed() {
+        let f = SimpleField::new("name", FieldTypes::CharField).null();
+        assert!(f.validate(&Value::Null).is_ok());
+    }
+
+    #[test]
+    fn test_validate_max_length() {
+        let f = SimpleField::new("name", FieldTypes::CharField).max_length(5);
+        assert!(f.validate(&Value::String("hello".into())).is_ok());
+        assert!(f.validate(&Value::String("hello!!!".into())).is_err());
+    }
+
+    #[test]
+    fn test_to_db_string() {
+        let f = SimpleField::new("name", FieldTypes::CharField);
+        assert_eq!(f.to_db(&Value::String("hello".into())), "'hello'");
+        assert_eq!(f.to_db(&Value::String("it's".into())), "'it''s'");
+    }
+
+    #[test]
+    fn test_to_db_number() {
+        let f = SimpleField::new("age", FieldTypes::IntegerField);
+        assert_eq!(f.to_db(&Value::Number(serde_json::Number::from(42))), "42");
+    }
+
+    #[test]
+    fn test_to_db_bool() {
+        let f = SimpleField::new("active", FieldTypes::BooleanField);
+        assert_eq!(f.to_db(&Value::Bool(true)), "1");
+        assert_eq!(f.to_db(&Value::Bool(false)), "0");
+    }
+
+    #[test]
+    fn test_to_db_null() {
+        let f = SimpleField::new("name", FieldTypes::CharField);
+        assert_eq!(f.to_db(&Value::Null), "NULL");
+    }
+
+    #[test]
+    fn test_from_db_integer() {
+        let f = SimpleField::new("age", FieldTypes::IntegerField);
+        assert_eq!(f.from_db("42"), Value::Number(serde_json::Number::from(42)));
+    }
+
+    #[test]
+    fn test_from_db_float() {
+        let f = SimpleField::new("price", FieldTypes::FloatField);
+        assert_eq!(f.from_db("3.14").as_f64(), Some(3.14));
+    }
+
+    #[test]
+    fn test_from_db_boolean() {
+        let f = SimpleField::new("active", FieldTypes::BooleanField);
+        assert_eq!(f.from_db("1"), Value::Bool(true));
+        assert_eq!(f.from_db("0"), Value::Bool(false));
+    }
+
+    #[test]
+    fn test_from_db_string() {
+        let f = SimpleField::new("name", FieldTypes::CharField);
+        assert_eq!(f.from_db("Alice"), Value::String("Alice".into()));
+    }
+}

@@ -200,6 +200,125 @@ impl Default for Application {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_application_new() {
+        let app = Application::new();
+        assert!(app.settings.is_none());
+        assert!(app.url_resolver.is_none());
+        assert!(app.template_engine.is_none());
+        assert!(app.static_dir.is_none());
+        assert!(app.media_dir.is_none());
+    }
+
+    #[test]
+    fn test_application_default() {
+        let app: Application = Default::default();
+        assert!(app.settings.is_none());
+    }
+
+    #[test]
+    fn test_application_configure() {
+        let settings = rjango_core::Settings::default();
+        let app = Application::new().configure(settings);
+        assert!(app.settings.is_some());
+    }
+
+    #[test]
+    fn test_application_with_dirs() {
+        let app = Application::new()
+            .with_static_dir(PathBuf::from("/tmp/static"))
+            .with_media_dir(PathBuf::from("/tmp/media"));
+        assert!(app.static_dir.is_some());
+        assert!(app.media_dir.is_some());
+        assert_eq!(app.static_dir.unwrap(), PathBuf::from("/tmp/static"));
+    }
+
+    #[test]
+    fn test_parse_request_get() {
+        let app = Application::new();
+        let req = app.parse_request("GET", "/test", &[], vec![]);
+        assert_eq!(req.method, rjango_core::HttpMethod::GET);
+        assert_eq!(req.path, "/test");
+    }
+
+    #[test]
+    fn test_parse_request_post() {
+        let app = Application::new();
+        let req = app.parse_request("POST", "/submit", &
+            vec![("content-type".into(), "application/json".into())],
+            b"{\"key\":\"val\"}".to_vec()
+        );
+        assert_eq!(req.method, rjango_core::HttpMethod::POST);
+        assert_eq!(req.body, b"{\"key\":\"val\"}".to_vec());
+    }
+
+    #[test]
+    fn test_parse_request_with_cookies() {
+        let app = Application::new();
+        let req = app.parse_request("GET", "/", &
+            vec![("cookie".into(), "session=abc123; theme=dark".into())],
+            vec![]
+        );
+        assert_eq!(req.cookies.get("session").unwrap(), "abc123");
+        assert_eq!(req.cookies.get("theme").unwrap(), "dark");
+    }
+
+    #[test]
+    fn test_parse_request_unknown_method_defaults_get() {
+        let app = Application::new();
+        let req = app.parse_request("UNKNOWN", "/", &[], vec![]);
+        assert_eq!(req.method, rjango_core::HttpMethod::GET);
+    }
+
+    #[test]
+    fn test_to_http_response() {
+        let app = Application::new();
+        let resp = rjango_core::Response::html("<h1>Hello</h1>");
+        let (status, headers, body) = app.to_http_response(resp);
+        assert_eq!(status, 200);
+        assert!(!body.is_empty());
+    }
+
+    #[test]
+    fn test_handle_request_no_routes_returns_404() {
+        let app = Application::new();
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/nonexistent");
+        let resp = app.handle_request(req);
+        assert_eq!(resp.status_code(), 404);
+    }
+
+    #[test]
+    fn test_serve_static_not_matching() {
+        let app = Application::new();
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/api/users");
+        let result = app.serve_static(&req);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_request_put_and_delete() {
+        let app = Application::new();
+        let req_put = app.parse_request("PUT", "/update", &[], vec![]);
+        assert_eq!(req_put.method, rjango_core::HttpMethod::PUT);
+        let req_del = app.parse_request("DELETE", "/delete", &[], vec![]);
+        assert_eq!(req_del.method, rjango_core::HttpMethod::DELETE);
+    }
+
+    #[test]
+    fn test_parse_request_head_and_options() {
+        let app = Application::new();
+        let req_head = app.parse_request("HEAD", "/", &[], vec![]);
+        assert_eq!(req_head.method, rjango_core::HttpMethod::HEAD);
+        let req_opts = app.parse_request("OPTIONS", "/", &[], vec![]);
+        assert_eq!(req_opts.method, rjango_core::HttpMethod::OPTIONS);
+    }
+}
+
 /// Run the server on a given address using raw TCP + HTTP parsing.
 pub async fn run_server(app: Arc<Application>, addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
     use tokio::net::TcpListener;

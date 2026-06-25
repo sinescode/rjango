@@ -4,6 +4,7 @@
 pub mod fields;
 pub mod widgets;
 pub mod rendering;
+pub mod modelform;
 
 use std::collections::HashMap;
 use serde_json::Value;

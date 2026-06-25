@@ -393,3 +393,309 @@ impl AdminSite {
         rjango_urls::URLResolver::new(patterns)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_admin_site_new() {
+        let site = AdminSite::new();
+        assert_eq!(site.site_title, "Rjango Admin");
+        assert_eq!(site.site_header, "Rjango Administration");
+        assert_eq!(site.index_title, "Site Administration");
+        assert_eq!(site.site_url, "/admin/");
+        assert!(site.registrations.is_empty());
+        assert!(site.get_registered_apps().is_empty());
+    }
+
+    #[test]
+    fn test_admin_site_register() {
+        let mut site = AdminSite::new();
+        let admin = crate::ModelAdmin::new("blog", "Post");
+        site.register("blog", admin);
+        
+        assert!(site.is_registered("blog", "Post"));
+        assert!(!site.is_registered("blog", "Nonexistent"));
+        assert!(!site.is_registered("other", "Post"));
+    }
+
+    #[test]
+    fn test_admin_site_register_multiple_apps() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        site.register("blog", crate::ModelAdmin::new("blog", "Comment"));
+        site.register("auth", crate::ModelAdmin::new("auth", "User"));
+        
+        assert!(site.is_registered("blog", "Post"));
+        assert!(site.is_registered("blog", "Comment"));
+        assert!(site.is_registered("auth", "User"));
+        
+        let apps = site.get_registered_apps();
+        assert_eq!(apps.len(), 2);
+        assert!(apps.contains(&"blog".to_string()));
+        assert!(apps.contains(&"auth".to_string()));
+    }
+
+    #[test]
+    fn test_admin_site_unregister() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        assert!(site.is_registered("blog", "Post"));
+        
+        site.unregister("blog", "Post");
+        assert!(!site.is_registered("blog", "Post"));
+    }
+
+    #[test]
+    fn test_admin_site_unregister_nonexistent() {
+        let mut site = AdminSite::new();
+        // Should not panic
+        site.unregister("nonexistent", "Whatever");
+    }
+
+    #[test]
+    fn test_admin_site_get_models() {
+        let mut site = AdminSite::new();
+        let admin = crate::ModelAdmin::new("blog", "Post");
+        site.register("blog", admin);
+        
+        let models = site.get_models("blog");
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].model_name, "Post");
+    }
+
+    #[test]
+    fn test_admin_site_get_models_nonexistent_app() {
+        let site = AdminSite::new();
+        let models = site.get_models("missing");
+        assert!(models.is_empty());
+    }
+
+    #[test]
+    fn test_admin_site_get_registered_apps_empty() {
+        let site = AdminSite::new();
+        assert!(site.get_registered_apps().is_empty());
+    }
+
+    #[test]
+    fn test_admin_site_index_empty() {
+        let site = AdminSite::new();
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/");
+        let resp = site.index(&req);
+        assert_eq!(resp.status_code(), 200);
+        assert!(resp.body_str().contains("No models registered"));
+    }
+
+    #[test]
+    fn test_admin_site_index_with_models() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/");
+        let resp = site.index(&req);
+        assert_eq!(resp.status_code(), 200);
+        let body = resp.body_str();
+        assert!(body.contains("/admin/blog/post/"));
+        assert!(body.contains("Post"));
+        assert!(body.contains("blog"));
+    }
+
+    #[test]
+    fn test_admin_site_app_index_redirects() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/");
+        let resp = site.app_index(&req, "blog");
+        assert_eq!(resp.status_code(), 302);
+        // The redirect URL preserves the model name casing as registered
+        assert_eq!(resp.header("location"), Some("/admin/blog/Post/"));
+    }
+
+    #[test]
+    fn test_admin_site_app_index_not_found() {
+        let site = AdminSite::new();
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/missing/");
+        let resp = site.app_index(&req, "missing");
+        assert_eq!(resp.status_code(), 404);
+    }
+
+    #[test]
+    fn test_admin_site_app_index_empty_app() {
+        let mut site = AdminSite::new();
+        // Register app but no models (won't happen with register, but test defensive code)
+        // Manually insert empty entry
+        site.registrations.insert("empty_app".into(), std::collections::HashMap::new());
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/empty_app/");
+        let resp = site.app_index(&req, "empty_app");
+        assert_eq!(resp.status_code(), 404);
+    }
+
+    #[test]
+    fn test_admin_site_list_view() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/post/");
+        let resp = site.list_view(&req, "blog", "Post");
+        assert_eq!(resp.status_code(), 200);
+        let body = resp.body_str();
+        assert!(body.contains("Post"));
+        assert!(body.contains("__str__"));
+        assert!(body.contains("Add Post"));
+    }
+
+    #[test]
+    fn test_admin_site_list_view_not_found() {
+        let site = AdminSite::new();
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/nonexistent/");
+        let resp = site.list_view(&req, "blog", "Nonexistent");
+        assert_eq!(resp.status_code(), 404);
+    }
+
+    #[test]
+    fn test_admin_site_add_view() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/post/add/");
+        let resp = site.add_view(&req, "blog", "Post");
+        assert_eq!(resp.status_code(), 200);
+        let body = resp.body_str();
+        assert!(body.contains("Add Post"));
+        assert!(body.contains("Save"));
+        assert!(body.contains("Cancel"));
+    }
+
+    #[test]
+    fn test_admin_site_add_view_not_found() {
+        let site = AdminSite::new();
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/missing/article/add/");
+        let resp = site.add_view(&req, "missing", "article");
+        assert_eq!(resp.status_code(), 404);
+    }
+
+    #[test]
+    fn test_admin_site_change_view() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/post/1/change/");
+        let resp = site.change_view(&req, "blog", "Post");
+        assert_eq!(resp.status_code(), 200);
+        let body = resp.body_str();
+        assert!(body.contains("Change Post"));
+        assert!(body.contains("Delete"));
+    }
+
+    #[test]
+    fn test_admin_site_change_view_not_found() {
+        let site = AdminSite::new();
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/missing/article/1/change/");
+        let resp = site.change_view(&req, "missing", "article");
+        assert_eq!(resp.status_code(), 404);
+    }
+
+    #[test]
+    fn test_admin_site_delete_view() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/post/1/delete/");
+        let resp = site.delete_view(&req, "blog", "Post");
+        assert_eq!(resp.status_code(), 200);
+        let body = resp.body_str();
+        assert!(body.contains("Delete Post"));
+        assert!(body.contains("Yes, I'm sure"));
+    }
+
+    #[test]
+    fn test_admin_site_delete_view_not_found() {
+        let site = AdminSite::new();
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/missing/article/1/delete/");
+        let resp = site.delete_view(&req, "missing", "article");
+        assert_eq!(resp.status_code(), 404);
+    }
+
+    #[test]
+    fn test_admin_site_dispatch_index() {
+        let site = AdminSite::new();
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/");
+        let resp = site.dispatch(&req, &[]);
+        assert_eq!(resp.status_code(), 200);
+    }
+
+    #[test]
+    fn test_admin_site_dispatch_app_index() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/");
+        let resp = site.dispatch(&req, &["blog"]);
+        // Redirects to /admin/blog/post/
+        assert_eq!(resp.status_code(), 302);
+    }
+
+    #[test]
+    fn test_admin_site_dispatch_list_view() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/post/");
+        let resp = site.dispatch(&req, &["blog", "Post"]);
+        assert_eq!(resp.status_code(), 200);
+    }
+
+    #[test]
+    fn test_admin_site_dispatch_add_view() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/post/add");
+        let resp = site.dispatch(&req, &["blog", "Post", "add"]);
+        assert_eq!(resp.status_code(), 200);
+    }
+
+    #[test]
+    fn test_admin_site_dispatch_change_view() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/post/1/change");
+        let resp = site.dispatch(&req, &["blog", "Post", "1", "change"]);
+        assert_eq!(resp.status_code(), 200);
+    }
+
+    #[test]
+    fn test_admin_site_dispatch_delete_view() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/post/1/delete");
+        let resp = site.dispatch(&req, &["blog", "Post", "1", "delete"]);
+        assert_eq!(resp.status_code(), 200);
+    }
+
+    #[test]
+    fn test_admin_site_dispatch_unknown_action() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/blog/post/unknown");
+        let resp = site.dispatch(&req, &["blog", "Post", "unknown"]);
+        assert_eq!(resp.status_code(), 404);
+    }
+
+    #[test]
+    fn test_admin_site_dispatch_too_many_segments() {
+        let site = AdminSite::new();
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/admin/a/b/c/d/e");
+        let resp = site.dispatch(&req, &["a", "b", "c", "d", "e"]);
+        assert_eq!(resp.status_code(), 404);
+    }
+
+    #[test]
+    fn test_admin_site_url_patterns() {
+        let site = AdminSite::new();
+        let patterns = site.url_patterns();
+        assert!(patterns.is_empty());
+    }
+
+    #[test]
+    fn test_admin_site_urls_generates_resolver() {
+        let mut site = AdminSite::new();
+        site.register("blog", crate::ModelAdmin::new("blog", "Post"));
+        let resolver = site.urls();
+        // Resolver should have patterns for index + changelist + add
+        // Just verify it doesn't panic
+    }
+}

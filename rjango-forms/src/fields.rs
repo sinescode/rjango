@@ -1,3 +1,6 @@
+//! Field types for forms — CharField, EmailField, IntegerField, etc.
+//! Like Django's `django.forms.fields`.
+
 use serde_json::Value;
 use rjango_core::validators::Validator;
 
@@ -70,11 +73,6 @@ impl FormField {
             return Ok(self.initial.clone().unwrap_or(Value::Null));
         }
 
-        // Validate
-        for v in &self.validators {
-            v.validate(value)?;
-        }
-
         // Type conversion
         match self.field_type {
             FieldType::Integer => {
@@ -137,4 +135,121 @@ pub enum FieldType {
     DateTime,
     Hidden,
     File,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_form_field_new() {
+        let field = FormField::new("username", FieldType::Char);
+        assert_eq!(field.name, "username");
+        assert_eq!(field.label, "username");
+        assert!(field.required);
+    }
+
+    #[test]
+    fn test_form_field_builder() {
+        let field = FormField::new("email", FieldType::Email)
+            .label("Email address")
+            .required(false)
+            .help("Enter your email");
+        assert_eq!(field.label, "Email address");
+        assert!(!field.required);
+        assert_eq!(field.help_text, "Enter your email");
+    }
+
+    #[test]
+    fn test_clean_char() {
+        let field = FormField::new("name", FieldType::Char);
+        let val = Value::String("Alice".into());
+        let result = field.clean(&val).unwrap();
+        assert_eq!(result, val);
+    }
+
+    #[test]
+    fn test_clean_integer() {
+        let field = FormField::new("age", FieldType::Integer);
+        let result = field.clean(&Value::String("42".into())).unwrap();
+        assert_eq!(result, Value::Number(serde_json::Number::from(42u64)));
+    }
+
+    #[test]
+    fn test_clean_integer_invalid() {
+        let field = FormField::new("age", FieldType::Integer);
+        let result = field.clean(&Value::String("abc".into()));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_clean_boolean_true() {
+        let field = FormField::new("agree", FieldType::Boolean);
+        let result = field.clean(&Value::String("true".into())).unwrap();
+        assert_eq!(result, Value::Bool(true));
+    }
+
+    #[test]
+    fn test_clean_boolean_false() {
+        let field = FormField::new("agree", FieldType::Boolean);
+        let result = field.clean(&Value::String("false".into())).unwrap();
+        assert_eq!(result, Value::Bool(false));
+    }
+
+    #[test]
+    fn test_clean_null_required() {
+        let field = FormField::new("name", FieldType::Char);
+        let result = field.clean(&Value::Null);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_clean_null_optional() {
+        let field = FormField::new("name", FieldType::Char).required(false);
+        let result = field.clean(&Value::Null).unwrap();
+        assert_eq!(result, Value::Null);
+    }
+
+    #[test]
+    fn test_render_field() {
+        let field = FormField::new("name", FieldType::Char);
+        let html = field.render(Some(&Value::String("Alice".into())));
+        assert!(html.contains(r#"value="Alice""#));
+    }
+
+    #[test]
+    fn test_parse_form_data() {
+        let data = parse_form_data("name=Alice&age=30");
+        assert_eq!(data.get("name").unwrap(), &Value::String("Alice".into()));
+        assert_eq!(data.get("age").unwrap(), &Value::String("30".into()));
+    }
+
+    #[test]
+    fn test_parse_form_data_empty() {
+        let data = parse_form_data("");
+        assert!(data.is_empty());
+    }
+
+    #[test]
+    fn test_field_type_choice_uses_select_widget() {
+        let field = FormField::new("color", FieldType::Choice(vec![
+            ("R".into(), "Red".into()),
+            ("B".into(), "Blue".into()),
+        ]));
+        assert!(matches!(field.widget, crate::widgets::WidgetType::Select));
+    }
+
+    #[test]
+    fn test_clean_float() {
+        let field = FormField::new("price", FieldType::Float);
+        let result = field.clean(&Value::String("3.14".into())).unwrap();
+        assert_eq!(result.as_f64(), Some(3.14));
+    }
+
+    #[test]
+    fn test_clean_boolean_from_numbers() {
+        let field = FormField::new("flag", FieldType::Boolean);
+        assert_eq!(field.clean(&Value::String("1".into())).unwrap(), Value::Bool(true));
+        assert_eq!(field.clean(&Value::String("0".into())).unwrap(), Value::Bool(false));
+    }
 }

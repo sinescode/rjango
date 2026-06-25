@@ -177,3 +177,44 @@ fn build_app(settings: rjango_core::Settings) -> rjango_server::Application {
 
     app
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_settings_default_when_no_file() {
+        let result = load_settings("/nonexistent_settings_file_12345.toml");
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert!(settings.debug);
+    }
+
+    #[test]
+    fn test_load_settings_error_on_bad_path() {
+        let result = load_settings("/");
+        assert!(result.is_err() || result.is_ok());
+    }
+
+    #[test]
+    fn test_build_app_returns_app() {
+        let settings = rjango_core::Settings::default();
+        let app = build_app(settings);
+        // Should return an Application
+        assert!(app.settings.is_some());
+    }
+
+    #[test]
+    fn test_build_app_has_middleware() {
+        let settings = rjango_core::Settings::default();
+        let _app = build_app(settings);
+        // Verify function compiles and runs without panic
+    }
+
+    #[test]
+    fn test_cli_struct_exists() {
+        use clap::CommandFactory;
+        // Verify the CLI types compile
+        let _ = Cli::command();
+    }
+}

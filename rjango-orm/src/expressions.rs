@@ -3,6 +3,177 @@
 
 use std::fmt;
 
+/// Q() object — complex query conditions (like Django's `django.db.models.Q`).
+/// Supports AND (`&`), OR (`|`), NOT (`~`) operations.
+#[derive(Debug, Clone)]
+pub struct Q {
+    pub children: Vec<QNode>,
+    pub connector: QConnector,
+    pub negated: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum QNode {
+    Condition(String, String, Option<String>), // field, lookup, value
+    Subquery(Box<Q>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum QConnector {
+    And,
+    Or,
+}
+
+impl Q {
+    /// Create a new Q object with a single condition.
+    pub fn new(field: &str, value: &str) -> Self {
+        Self {
+            children: vec![QNode::Condition(field.to_string(), "exact".into(), Some(value.to_string()))],
+            connector: QConnector::And,
+            negated: false,
+        }
+    }
+
+    /// Create a Q object with a custom lookup.
+    pub fn with_lookup(field: &str, lookup: &str, value: &str) -> Self {
+        Self {
+            children: vec![QNode::Condition(field.to_string(), lookup.to_string(), Some(value.to_string()))],
+            connector: QConnector::And,
+            negated: false,
+        }
+    }
+
+    /// Negate this Q object (`~Q()`).
+    pub fn negate(mut self) -> Self {
+        self.negated = !self.negated;
+        self
+    }
+
+    /// Add a child Q object.
+    fn add_child(&mut self, child: Q) {
+        self.children.push(QNode::Subquery(Box::new(child)));
+    }
+
+    /// Combine with another Q using AND (`&`).
+    pub fn and(mut self, other: Q) -> Self {
+        if self.connector == QConnector::And {
+            self.children.push(QNode::Subquery(Box::new(other)));
+            self
+        } else {
+            Self {
+                children: vec![
+                    QNode::Subquery(Box::new(self)),
+                    QNode::Subquery(Box::new(other)),
+                ],
+                connector: QConnector::And,
+                negated: false,
+            }
+        }
+    }
+
+    /// Combine with another Q using OR (`|`).
+    pub fn or(mut self, other: Q) -> Self {
+        if self.connector == QConnector::Or {
+            self.children.push(QNode::Subquery(Box::new(other)));
+            self
+        } else {
+            Self {
+                children: vec![
+                    QNode::Subquery(Box::new(self)),
+                    QNode::Subquery(Box::new(other)),
+                ],
+                connector: QConnector::Or,
+                negated: false,
+            }
+        }
+    }
+
+    /// Render this Q object to a SQL WHERE clause.
+    pub fn to_sql(&self) -> String {
+        let parts: Vec<String> = self.children.iter().map(|child| {
+            match child {
+                QNode::Condition(field, lookup, value) => {
+                    match lookup.as_str() {
+                        "exact" => format!("{} = '{}'", quote_name(field), value.as_deref().unwrap_or("")),
+                        "iexact" => format!("LOWER({}) = LOWER('{}')", quote_name(field), value.as_deref().unwrap_or("")),
+                        "contains" => format!("{} LIKE '%{}%'", quote_name(field), value.as_deref().unwrap_or("")),
+                        "icontains" => format!("LOWER({}) LIKE LOWER('%{}%')", quote_name(field), value.as_deref().unwrap_or("")),
+                        "startswith" => format!("{} LIKE '{}%'", quote_name(field), value.as_deref().unwrap_or("")),
+                        "endswith" => format!("{} LIKE '%{}'", quote_name(field), value.as_deref().unwrap_or("")),
+                        "gt" => format!("{} > '{}'", quote_name(field), value.as_deref().unwrap_or("")),
+                        "gte" => format!("{} >= '{}'", quote_name(field), value.as_deref().unwrap_or("")),
+                        "lt" => format!("{} < '{}'", quote_name(field), value.as_deref().unwrap_or("")),
+                        "lte" => format!("{} <= '{}'", quote_name(field), value.as_deref().unwrap_or("")),
+                        "in" => format!("{} IN ({})", quote_name(field), value.as_deref().unwrap_or("")),
+                        "isnull" => {
+                            if value.as_deref() == Some("true") {
+                                format!("{} IS NULL", quote_name(field))
+                            } else {
+                                format!("{} IS NOT NULL", quote_name(field))
+                            }
+                        }
+                        _ => format!("{} {} '{}'", quote_name(field), lookup, value.as_deref().unwrap_or("")),
+                    }
+                }
+                QNode::Subquery(q) => {
+                    let sql = q.to_sql();
+                    if q.negated { format!("NOT ({})", sql) } else { sql }
+                }
+            }
+        }).collect();
+
+        let joined = match self.connector {
+            QConnector::And => parts.join(" AND "),
+            QConnector::Or => parts.join(" OR "),
+        };
+
+        if self.negated {
+            format!("NOT ({})", joined)
+        } else if parts.len() > 1 {
+            format!("({})", joined)
+        } else {
+            joined
+        }
+    }
+}
+
+fn quote_name(name: &str) -> String {
+    format!("\"{}\"", name)
+}
+
+/// Create a Q object.
+pub fn q(field: &str, value: &str) -> Q {
+    Q::new(field, value)
+}
+
+/// Aggregate expression — like Django's `django.db.models.aggregates`.
+#[derive(Debug, Clone)]
+pub enum Aggregate {
+    Sum(Expression),
+    Count(Expression),
+    Avg(Expression),
+    Min(Expression),
+    Max(Expression),
+}
+
+impl Aggregate {
+    pub fn to_sql(&self) -> String {
+        match self {
+            Aggregate::Sum(e) => format!("SUM({})", e.to_sql()),
+            Aggregate::Count(e) => format!("COUNT({})", e.to_sql()),
+            Aggregate::Avg(e) => format!("AVG({})", e.to_sql()),
+            Aggregate::Min(e) => format!("MIN({})", e.to_sql()),
+            Aggregate::Max(e) => format!("MAX({})", e.to_sql()),
+        }
+    }
+}
+
+pub fn sum(expr: Expression) -> Aggregate { Aggregate::Sum(expr) }
+pub fn count(expr: Expression) -> Aggregate { Aggregate::Count(expr) }
+pub fn avg(expr: Expression) -> Aggregate { Aggregate::Avg(expr) }
+pub fn min(expr: Expression) -> Aggregate { Aggregate::Min(expr) }
+pub fn max(expr: Expression) -> Aggregate { Aggregate::Max(expr) }
+
 /// A database expression that can be rendered as SQL.
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -307,5 +478,92 @@ mod tests {
         let expr = lower(trim(col("email")));
         let sql = expr.to_sql();
         assert_eq!(sql, r#"LOWER(TRIM("email"))"#);
+    }
+
+    #[test]
+    fn test_q_simple() {
+        let q = Q::new("name", "Alice");
+        assert_eq!(q.to_sql(), r#""name" = 'Alice'"#);
+    }
+
+    #[test]
+    fn test_q_contains() {
+        let q = Q::with_lookup("title", "contains", "rust");
+        assert_eq!(q.to_sql(), r#""title" LIKE '%rust%'"#);
+    }
+
+    #[test]
+    fn test_q_and() {
+        let q1 = Q::new("status", "active");
+        let q2 = Q::new("age", "18");
+        let combined = q1.and(q2);
+        assert_eq!(combined.to_sql(), r#"("status" = 'active' AND "age" = '18')"#);
+    }
+
+    #[test]
+    fn test_q_or() {
+        let q1 = Q::new("role", "admin");
+        let q2 = Q::new("role", "moderator");
+        let combined = q1.or(q2);
+        assert_eq!(combined.to_sql(), r#"("role" = 'admin' OR "role" = 'moderator')"#);
+    }
+
+    #[test]
+    fn test_q_negated() {
+        let q = Q::new("deleted", "true").negate();
+        assert_eq!(q.to_sql(), r#"NOT ("deleted" = 'true')"#);
+    }
+
+    #[test]
+    fn test_q_complex() {
+        // (status='active' AND (role='admin' OR role='moderator'))
+        let role_q = Q::new("role", "admin").or(Q::new("role", "moderator"));
+        let combined = Q::new("status", "active").and(role_q);
+        assert_eq!(combined.to_sql(),
+            r#"("status" = 'active' AND ("role" = 'admin' OR "role" = 'moderator'))"#);
+    }
+
+    #[test]
+    fn test_q_lookup_gt() {
+        let q = Q::with_lookup("age", "gt", "21");
+        assert_eq!(q.to_sql(), r#""age" > '21'"#);
+    }
+
+    #[test]
+    fn test_q_lookup_isnull() {
+        let q = Q::with_lookup("email", "isnull", "true");
+        assert_eq!(q.to_sql(), r#""email" IS NULL"#);
+    }
+
+    #[test]
+    fn test_q_function() {
+        let q = q("name", "Bob");
+        assert_eq!(q.to_sql(), r#""name" = 'Bob'"#);
+    }
+
+    #[test]
+    fn test_aggregate_sum() {
+        let agg = sum(col("price"));
+        assert_eq!(agg.to_sql(), r#"SUM("price")"#);
+    }
+    #[test]
+    fn test_aggregate_count() {
+        let agg = count(col("id"));
+        assert_eq!(agg.to_sql(), r#"COUNT("id")"#);
+    }
+    #[test]
+    fn test_aggregate_avg() {
+        let agg = avg(col("rating"));
+        assert_eq!(agg.to_sql(), r#"AVG("rating")"#);
+    }
+    #[test]
+    fn test_aggregate_min() {
+        let agg = min(col("age"));
+        assert_eq!(agg.to_sql(), r#"MIN("age")"#);
+    }
+    #[test]
+    fn test_aggregate_max() {
+        let agg = max(col("score"));
+        assert_eq!(agg.to_sql(), r#"MAX("score")"#);
     }
 }

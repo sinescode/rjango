@@ -48,3 +48,35 @@ impl AnonymousUser {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_user_new() {
+        let user = User::new("alice", "alice@example.com");
+        assert_eq!(user.username, "alice");
+        assert_eq!(user.email, "alice@example.com");
+        assert!(user.is_active);
+        assert!(!user.is_staff);
+        assert!(!user.is_superuser);
+        assert!(user.is_authenticated());
+    }
+
+    #[test]
+    fn test_anonymous_user() {
+        let anon = AnonymousUser;
+        assert!(!anon.is_authenticated());
+    }
+
+    #[test]
+    fn test_user_has_perm() {
+        let user = User::new("bob", "bob@example.com");
+        assert!(!user.has_perm("app.view_model")); // not superuser
+
+        let mut admin = User::new("admin", "admin@example.com");
+        admin.is_superuser = true;
+        assert!(admin.has_perm("app.view_model"));
+    }
+}

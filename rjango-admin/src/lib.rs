@@ -62,3 +62,77 @@ pub fn register_model(app_label: &str, model_name: &str) -> ModelAdmin {
     register(&app_label_owned, admin.clone());
     admin
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_model_admin_new() {
+        let admin = ModelAdmin::new("blog", "Post");
+        assert_eq!(admin.model_name, "Post");
+        assert_eq!(admin.app_label, "blog");
+        assert_eq!(admin.list_display, vec!["__str__"]);
+        assert!(admin.list_filter.is_empty());
+        assert!(admin.search_fields.is_empty());
+        assert!(admin.ordering.is_none());
+        assert_eq!(admin.list_per_page, 100);
+    }
+
+    #[test]
+    fn test_model_admin_list_display() {
+        let admin = ModelAdmin::new("blog", "Post")
+            .list_display(vec!["title".into(), "author".into(), "created_at".into()]);
+        assert_eq!(admin.list_display.len(), 3);
+        assert_eq!(admin.list_display[0], "title");
+    }
+
+    #[test]
+    fn test_model_admin_search_fields() {
+        let admin = ModelAdmin::new("blog", "Post")
+            .search_fields(vec!["title".into(), "body".into()]);
+        assert_eq!(admin.search_fields.len(), 2);
+    }
+
+    #[test]
+    fn test_model_admin_clone() {
+        let admin = ModelAdmin::new("auth", "User");
+        let cloned = admin.clone();
+        assert_eq!(cloned.model_name, "User");
+        assert_eq!(cloned.app_label, "auth");
+    }
+
+    #[test]
+    fn test_register_model_helper() {
+        let admin = register_model("blog", "Article");
+        assert_eq!(admin.model_name, "Article");
+        // Verify it was registered
+        let site = ADMIN_SITE.lock().unwrap();
+        assert!(site.is_registered("blog", "Article"));
+    }
+
+    #[test]
+    fn test_register_function() {
+        let admin = ModelAdmin::new("polls", "Question");
+        register("polls", admin);
+        let site = ADMIN_SITE.lock().unwrap();
+        assert!(site.is_registered("polls", "Question"));
+    }
+
+    #[test]
+    fn test_register_multiple_models() {
+        let _admin1 = register_model("shop", "Product");
+        let _admin2 = register_model("shop", "Category");
+        let site = ADMIN_SITE.lock().unwrap();
+        assert!(site.is_registered("shop", "Product"));
+        assert!(site.is_registered("shop", "Category"));
+    }
+
+    #[test]
+    fn test_admin_site_lazy_init() {
+        // Access the static to ensure it initializes
+        let site = ADMIN_SITE.lock().unwrap();
+        assert_eq!(site.site_title, "Rjango Admin");
+    }
+}
+

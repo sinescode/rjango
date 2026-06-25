@@ -52,3 +52,56 @@ pub fn pre_migrate() -> Signal { get_signal("pre_migrate") }
 pub fn post_migrate() -> Signal { get_signal("post_migrate") }
 pub fn request_started() -> Signal { get_signal("request_started") }
 pub fn request_finished() -> Signal { get_signal("request_finished") }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn test_signal_connect_and_send() {
+        let signal = Signal::new("test_signal");
+        let called = Arc::new(AtomicBool::new(false));
+        let called_clone = called.clone();
+        signal.connect(move |_| { called_clone.store(true, Ordering::SeqCst); });
+        signal.send(&42);
+        assert!(called.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_signal_name() {
+        let signal = Signal::new("my_signal");
+        assert_eq!(signal.name(), "my_signal");
+    }
+
+    #[test]
+    fn test_get_signal_reuses() {
+        let s1 = get_signal("shared");
+        let s2 = get_signal("shared");
+        assert_eq!(s1.name(), s2.name());
+    }
+
+    #[test]
+    fn test_predefined_signals() {
+        assert_eq!(pre_save().name(), "pre_save");
+        assert_eq!(post_save().name(), "post_save");
+        assert_eq!(pre_delete().name(), "pre_delete");
+        assert_eq!(post_delete().name(), "post_delete");
+        assert_eq!(pre_migrate().name(), "pre_migrate");
+        assert_eq!(post_migrate().name(), "post_migrate");
+        assert_eq!(request_started().name(), "request_started");
+        assert_eq!(request_finished().name(), "request_finished");
+    }
+
+    #[test]
+    fn test_signal_multiple_receivers() {
+        let signal = Signal::new("multi");
+        let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let c1 = counter.clone();
+        let c2 = counter.clone();
+        signal.connect(move |_| { c1.fetch_add(1, Ordering::SeqCst); });
+        signal.connect(move |_| { c2.fetch_add(1, Ordering::SeqCst); });
+        signal.send(&"test");
+        assert_eq!(counter.load(Ordering::SeqCst), 2);
+    }
+}

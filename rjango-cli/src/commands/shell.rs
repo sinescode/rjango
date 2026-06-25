@@ -19,3 +19,12 @@ pub fn run() {
         println!("  (evaluator not yet connected)");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_shell_run_no_panic() {
+        // Just verify the function signature compiles
+        let _ = super::run;
+    }
+}

@@ -42,3 +42,73 @@ where
     println!("  OK");
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_test_case_new() {
+        let tc = TestCase::new();
+        assert!(tc.client.is_none());
+    }
+
+    #[test]
+    fn test_assert_equal_integers() {
+        let tc = TestCase::new();
+        tc.assert_equal(1 + 1, 2);
+    }
+
+    #[test]
+    fn test_assert_equal_strings() {
+        let tc = TestCase::new();
+        tc.assert_equal("hello", "hello");
+    }
+
+    #[test]
+    fn test_assert_equal_vectors() {
+        let tc = TestCase::new();
+        tc.assert_equal(vec![1, 2, 3], vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_assert_true() {
+        let tc = TestCase::new();
+        tc.assert_true(true);
+    }
+
+    #[test]
+    fn test_assert_false() {
+        let tc = TestCase::new();
+        tc.assert_false(false);
+    }
+
+    #[test]
+    fn test_assert_true_with_comparison() {
+        let tc = TestCase::new();
+        tc.assert_true(42 > 0);
+        tc.assert_true("abc".len() == 3);
+    }
+
+    #[test]
+    fn test_assert_false_with_comparison() {
+        let tc = TestCase::new();
+        tc.assert_false(42 < 0);
+        tc.assert_false("abc".is_empty());
+    }
+
+    #[test]
+    fn test_teardown_no_panic() {
+        let tc = TestCase::new();
+        tc.teardown();
+    }
+
+    #[test]
+    fn test_setup_with_application() {
+        let app = rjango_server::Application::new();
+        let mut tc = TestCase::new();
+        tc.setup(app);
+        assert!(tc.client.is_some());
+        tc.teardown();
+    }
+}

@@ -47,3 +47,138 @@ fn handle_extends(_args: &[&str]) -> String {
     // Extends: just return the parent name for now
     format!("{{extends {}}}", _args.first().unwrap_or(&""))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::Context;
+
+    #[test]
+    fn test_evaluate_if_true() {
+        let mut ctx = Context::new();
+        ctx.insert("enabled".into(), serde_json::Value::Bool(true));
+        let result = evaluate_tag("if", &["enabled"], &ctx, "visible content");
+        assert_eq!(result, "visible content");
+    }
+
+    #[test]
+    fn test_evaluate_if_false() {
+        let mut ctx = Context::new();
+        ctx.insert("enabled".into(), serde_json::Value::Bool(false));
+        let result = evaluate_tag("if", &["enabled"], &ctx, "should not appear");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_evaluate_if_missing_var() {
+        let ctx = Context::new();
+        let result = evaluate_tag("if", &["nonexistent"], &ctx, "body");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_evaluate_if_else() {
+        let mut ctx = Context::new();
+        ctx.insert("flag".into(), serde_json::Value::Bool(false));
+        let result = evaluate_tag("if", &["flag"], &ctx, "then branch{% else %}else branch");
+        assert_eq!(result, "else branch");
+    }
+
+    #[test]
+    fn test_evaluate_if_no_args() {
+        let ctx = Context::new();
+        let result = evaluate_tag("if", &[], &ctx, "body");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_evaluate_if_non_null_is_truthy() {
+        let mut ctx = Context::new();
+        ctx.insert("name".into(), serde_json::Value::String("hello".into()));
+        let result = evaluate_tag("if", &["name"], &ctx, "hello body");
+        assert_eq!(result, "hello body");
+    }
+
+    #[test]
+    fn test_evaluate_if_null_is_falsy() {
+        let mut ctx = Context::new();
+        ctx.insert("nothing".into(), serde_json::Value::Null);
+        let result = evaluate_tag("if", &["nothing"], &ctx, "body");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_evaluate_for_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("for", &["x", "in", "items"], &ctx, "{{ x }}");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_evaluate_block_renders_body() {
+        let ctx = Context::new();
+        let result = evaluate_tag("block", &["content"], &ctx, "<p>Hello</p>");
+        assert_eq!(result, "<p>Hello</p>");
+    }
+
+    #[test]
+    fn test_evaluate_block_empty_body() {
+        let ctx = Context::new();
+        let result = evaluate_tag("block", &["empty_block"], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_evaluate_extends_with_name() {
+        let ctx = Context::new();
+        let result = evaluate_tag("extends", &["base.html"], &ctx, "");
+        assert_eq!(result, "{extends base.html}");
+    }
+
+    #[test]
+    fn test_evaluate_extends_no_args() {
+        let ctx = Context::new();
+        let result = evaluate_tag("extends", &[], &ctx, "");
+        assert_eq!(result, "{extends }");
+    }
+
+    #[test]
+    fn test_evaluate_comment_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("comment", &[], &ctx, "hidden <!-- text -->");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_evaluate_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("empty", &[], &ctx, "body");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_evaluate_end_tags_return_empty() {
+        let ctx = Context::new();
+        assert_eq!(evaluate_tag("endblock", &[], &ctx, ""), "");
+        assert_eq!(evaluate_tag("endif", &[], &ctx, ""), "");
+        assert_eq!(evaluate_tag("endfor", &[], &ctx, ""), "");
+        assert_eq!(evaluate_tag("endcomment", &[], &ctx, ""), "");
+    }
+
+    #[test]
+    fn test_evaluate_unknown_tag() {
+        let ctx = Context::new();
+        let result = evaluate_tag("custom_tag", &["arg1", "arg2"], &ctx, "");
+        assert_eq!(result, "{% custom_tag arg1 arg2 %}");
+    }
+
+    #[test]
+    fn test_handle_if_with_nested_dot_access() {
+        let mut ctx = Context::new();
+        let mut inner = serde_json::Map::new();
+        inner.insert("active".into(), serde_json::Value::Bool(true));
+        ctx.insert("user".into(), serde_json::Value::Object(inner));
+        let result = evaluate_tag("if", &["user.active"], &ctx, "user active");
+        assert_eq!(result, "user active");
+    }
+}

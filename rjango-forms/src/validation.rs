@@ -154,8 +154,6 @@ impl RegexValidator {
 
 impl Validator for RegexValidator {
     fn validate(&self, value: &str) -> Result<(), String> {
-        // Simple pattern matching without regex crate
-        // For full regex support, add the regex crate to Cargo.toml
         if self.pattern.is_empty() {
             Ok(())
         } else if value.contains(&self.pattern) {
@@ -163,5 +161,110 @@ impl Validator for RegexValidator {
         } else {
             Err("Value does not match the required pattern.".to_string())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── ValidationResult tests ──────────────────────────────────────────
+
+    #[test]
+    fn test_validation_result_valid() {
+        let r = ValidationResult::valid();
+        assert!(r.is_valid);
+        assert!(r.errors.is_empty());
+        assert!(r.field_errors.is_empty());
+    }
+
+    #[test]
+    fn test_validation_result_invalid() {
+        let r = ValidationResult::invalid(vec!["Error".into()]);
+        assert!(!r.is_valid);
+        assert_eq!(r.errors.len(), 1);
+    }
+
+    #[test]
+    fn test_validation_result_with_field_error() {
+        let r = ValidationResult::valid()
+            .with_field_error("email", "Invalid email");
+        assert!(!r.is_valid);
+        assert_eq!(r.field_errors.get("email").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_validation_result_add_error() {
+        let mut r = ValidationResult::valid();
+        r.add_error("General error".into());
+        assert!(!r.is_valid);
+    }
+
+    #[test]
+    fn test_validation_result_add_field_error() {
+        let mut r = ValidationResult::valid();
+        r.add_field_error("name".into(), "Too short".into());
+        assert!(!r.is_valid);
+        assert_eq!(r.field_errors.get("name").unwrap().len(), 1);
+    }
+
+    // ── Validator tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_required_validator() {
+        let v = RequiredValidator;
+        assert!(v.validate("hello").is_ok());
+        assert!(v.validate("").is_err());
+    }
+
+    #[test]
+    fn test_email_validator() {
+        let v = EmailValidator;
+        assert!(v.validate("user@example.com").is_ok());
+        assert!(v.validate("not-email").is_err());
+        assert!(v.validate("").is_err());
+    }
+
+    #[test]
+    fn test_url_validator() {
+        let v = URLValidator;
+        assert!(v.validate("https://example.com").is_ok());
+        assert!(v.validate("http://example.com").is_ok());
+        assert!(v.validate("ftp://example.com").is_err());
+        assert!(v.validate("not-a-url").is_err());
+    }
+
+    #[test]
+    fn test_min_length_validator() {
+        let v = MinLengthValidator::new(3);
+        assert!(v.validate("abc").is_ok());
+        assert!(v.validate("ab").is_err());
+    }
+
+    #[test]
+    fn test_max_length_validator() {
+        let v = MaxLengthValidator::new(5);
+        assert!(v.validate("12345").is_ok());
+        assert!(v.validate("123456").is_err());
+    }
+
+    #[test]
+    fn test_regex_validator() {
+        let v = RegexValidator::new("pattern");
+        assert!(v.validate("has pattern here").is_ok());
+        assert!(v.validate("no match").is_err());
+    }
+
+    #[test]
+    fn test_regex_validator_empty_pattern() {
+        let v = RegexValidator::new("");
+        assert!(v.validate("anything").is_ok());
+    }
+
+    #[test]
+    fn test_validator_validate_field() {
+        let v = RequiredValidator;
+        assert!(v.validate_field("username", "alice").is_ok());
+        assert!(v.validate_field("username", "").is_err());
     }
 }

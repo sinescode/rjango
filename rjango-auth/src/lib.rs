@@ -4,6 +4,8 @@ pub mod models;
 pub mod backends;
 pub mod middleware_;
 pub mod views;
+pub mod hashers;
+pub mod decorators;
 
 pub use models::{User, AnonymousUser};
 pub use backends::AuthenticationBackend;
@@ -57,3 +59,22 @@ pub fn make_perm(app_label: &str, action: &str, model_name: &str) -> String {
 }
 
 pub use views::{login_view, handle_login, logout_view};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_make_perm() {
+        assert_eq!(make_perm("auth", "view", "user"), "auth.view_user");
+        assert_eq!(make_perm("app", "change", "model"), "app.change_model");
+        assert_eq!(make_perm("auth", "add", "permission"), "auth.add_permission");
+    }
+
+    #[test]
+    fn test_register_backend() {
+        init_backends();
+        let backends = get_backends();
+        assert!(!backends.is_empty());
+    }
+}

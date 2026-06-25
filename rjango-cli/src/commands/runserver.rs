@@ -10,3 +10,11 @@ pub fn run(addr: &std::net::SocketAddr, app: rjango_server::Application) {
         rjango_server::run_server(Arc::new(app), *addr).await.unwrap();
     });
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_runserver_fn_exists() {
+        let _ = super::run;
+    }
+}

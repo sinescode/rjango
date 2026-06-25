@@ -16,6 +16,11 @@ pub fn get_urlconf() -> Option<URLResolver> {
     URL_CONF.read().unwrap().as_ref().cloned()
 }
 
+/// Include a URL resolver (for nesting URL configs).
+pub fn include(resolver: URLResolver) -> URLResolver {
+    resolver
+}
+
 /// Clear URL caches.
 pub fn clear_url_caches() {
     *URL_CONF.write().unwrap() = None;

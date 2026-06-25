@@ -195,7 +195,7 @@ impl Request {
 }
 
 /// Outgoing HTTP response.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Response {
     pub status: StatusCode,
     pub headers: HashMap<String, String>,

@@ -73,3 +73,122 @@ impl Middleware for SessionMiddleware {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rjango_core::{HttpMethod, Request, Response, RjangoError};
+
+    #[test]
+    fn test_session_middleware_defaults() {
+        let mw = SessionMiddleware::default();
+        assert_eq!(mw.cookie_name, "sessionid");
+        assert_eq!(mw.cookie_age, 1209600);
+        assert!(mw.http_only);
+        assert_eq!(mw.same_site, "Lax");
+    }
+
+    #[test]
+    fn test_session_middleware_new() {
+        let mw = SessionMiddleware::new();
+        assert_eq!(mw.cookie_name, "sessionid");
+        assert_eq!(mw.cookie_age, 1209600);
+    }
+
+    #[test]
+    fn test_session_middleware_implements_middleware() {
+        let mw = SessionMiddleware::new();
+        // The type must implement the Middleware trait
+        fn assert_middleware<T: Middleware>() {}
+        assert_middleware::<SessionMiddleware>();
+    }
+
+    #[test]
+    fn test_session_middleware_process_request_no_cookie() {
+        let mw = SessionMiddleware::new();
+        let mut req = Request::new(HttpMethod::GET, "/");
+        let result = mw.process_request(&mut req);
+        // Should return Ok(None) and set up a session
+        assert!(result.is_ok());
+        let opt_resp = result.unwrap();
+        assert!(opt_resp.is_none());
+        // Session should be set
+        assert!(req.session.is_some());
+        if let Some(ref session) = req.session {
+            assert!(session.contains_key("_session_key"));
+        }
+    }
+
+    #[test]
+    fn test_session_middleware_process_request_with_cookie() {
+        let mw = SessionMiddleware::new();
+        let mut req = Request::new(HttpMethod::GET, "/");
+        // Set a non-existent session cookie - should generate new key
+        req.cookies.insert("sessionid".into(), "nonexistent_key".into());
+        let result = mw.process_request(&mut req).unwrap();
+        assert!(result.is_none());
+        assert!(req.session.is_some());
+        if let Some(ref session) = req.session {
+            let key = session.get("_session_key").and_then(|v| v.as_str());
+            assert!(key.is_some());
+        }
+    }
+
+    #[test]
+    fn test_session_middleware_process_response() {
+        let mw = SessionMiddleware::new();
+        let mut req = Request::new(HttpMethod::GET, "/");
+        // First process_request to set up session
+        mw.process_request(&mut req).unwrap();
+        // Then process_response
+        let mut resp = Response::html("done");
+        let result = mw.process_response(&req, &mut resp);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_session_middleware_process_response_no_session() {
+        let mw = SessionMiddleware::new();
+        let req = Request::new(HttpMethod::GET, "/");
+        let mut resp = Response::html("done");
+        // No session set, should be a no-op
+        let result = mw.process_response(&req, &mut resp);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_session_middleware_full_cycle() {
+        let mw = SessionMiddleware::new();
+        let mut req = Request::new(HttpMethod::GET, "/");
+        
+        // process_request
+        mw.process_request(&mut req).unwrap();
+        let session_key = req.session.as_ref()
+            .and_then(|s| s.get("_session_key"))
+            .and_then(|v| v.as_str())
+            .unwrap()
+            .to_string();
+        
+        // Store something in session
+        if let Some(ref mut session) = req.session {
+            session.insert("visited".into(), serde_json::Value::Number(serde_json::Number::from(1)));
+        }
+        
+        // process_response should save it
+        let mut resp = Response::html("done");
+        mw.process_response(&req, &mut resp).unwrap();
+        
+        // The key should be valid (as hex string), just verify non-empty
+        assert!(!session_key.is_empty());
+    }
+
+    #[test]
+    fn test_session_middleware_process_exception_noop() {
+        let mw = SessionMiddleware::new();
+        let req = Request::new(HttpMethod::GET, "/");
+        let err = RjangoError::NotFound("test".into());
+        let result = mw.process_exception(&req, &err);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+}

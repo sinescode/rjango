@@ -22,3 +22,11 @@ pub fn run() {
 
     println!("Superuser '{}' created successfully.", username);
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_createsuperuser_fn_exists() {
+        let _ = super::run;
+    }
+}

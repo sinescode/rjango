@@ -9,7 +9,7 @@ pub fn run(args: &[String]) {
     for arg in args {
         cmd.arg(arg);
     }
-    
+
     match cmd.status() {
         Ok(status) => {
             if status.success() {
@@ -21,5 +21,13 @@ pub fn run(args: &[String]) {
         Err(e) => {
             eprintln!("Failed to run tests: {}", e);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_fn_exists() {
+        fn _assert(_: &[String]) {}
     }
 }

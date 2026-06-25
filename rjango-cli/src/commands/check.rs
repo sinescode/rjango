@@ -32,3 +32,29 @@ pub fn run(settings: &Settings) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_empty_settings() {
+        let settings = rjango_core::Settings::default();
+        // Just verify it runs without panic
+        run(&settings);
+    }
+
+    #[test]
+    fn test_check_with_debug_enabled() {
+        let mut settings = rjango_core::Settings::default();
+        settings.debug = true;
+        settings.secret_key = "test-key".to_string();
+        run(&settings);
+    }
+
+    #[test]
+    fn test_check_public_function_exists() {
+        // Verify the function signature compiles
+        fn _assert_fn(_: &rjango_core::Settings) {}
+    }
+}

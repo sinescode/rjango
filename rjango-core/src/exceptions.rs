@@ -196,3 +196,63 @@ impl SuspiciousOperation {
         Self(message.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rjango_error_display() {
+        let err = RjangoError::Config("test config error".into());
+        assert_eq!(err.to_string(), "Configuration error: test config error");
+        
+        let err = RjangoError::NotFound("page not found".into());
+        assert_eq!(err.to_string(), "Not found: page not found");
+    }
+
+    #[test]
+    fn test_http_error_status_code() {
+        assert_eq!(HttpError::NotFound("".into()).status_code(), http::StatusCode::NOT_FOUND);
+        assert_eq!(HttpError::Forbidden("".into()).status_code(), http::StatusCode::FORBIDDEN);
+        assert_eq!(HttpError::BadRequest("".into()).status_code(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(HttpError::Unauthorized("".into()).status_code(), http::StatusCode::UNAUTHORIZED);
+        assert_eq!(HttpError::InternalServerError("".into()).status_code(), http::StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn test_validation_error() {
+        let err = ValidationError::new("Invalid form")
+            .with_field_error("email", "Invalid email");
+        assert_eq!(err.message, "Invalid form");
+        assert_eq!(err.field_errors.len(), 1);
+        assert_eq!(err.field_errors[0].field, "email");
+    }
+
+    #[test]
+    fn test_validation_error_display() {
+        let err = ValidationError::new("Form errors")
+            .with_field_error_code("name", "Too short", "min_length");
+        let display = err.to_string();
+        assert!(display.contains("Form errors"));
+        assert!(display.contains("name"));
+        assert!(display.contains("Too short"));
+    }
+
+    #[test]
+    fn test_http404() {
+        let err = Http404::new("Page was not found");
+        assert_eq!(err.to_string(), "Page not found: Page was not found");
+    }
+
+    #[test]
+    fn test_permission_denied() {
+        let err = PermissionDenied::new("Access denied");
+        assert_eq!(err.to_string(), "Permission denied: Access denied");
+    }
+
+    #[test]
+    fn test_suspicious_operation() {
+        let err = SuspiciousOperation::new("Suspicious request");
+        assert_eq!(err.to_string(), "Suspicious operation: Suspicious request");
+    }
+}
