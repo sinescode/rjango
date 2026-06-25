@@ -1,0 +1,10 @@
+[package]
+name = "rjango-conf"
+version.workspace = true
+edition.workspace = true
+description = "Global settings with defaults (like django.conf)"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }
+serde.workspace = true
+serde_json.workspace = true

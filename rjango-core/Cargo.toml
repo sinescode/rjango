@@ -1,0 +1,23 @@
+[package]
+name = "rjango-core"
+version.workspace = true
+edition.workspace = true
+description = "Core types: errors, HTTP, settings, app registry"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+regex.workspace = true
+parking_lot.workspace = true
+percent-encoding.workspace = true
+mime_guess.workspace = true
+toml = "0.8"
+async-trait.workspace = true
+
+[dev-dependencies]
+tempfile = "3.27.0"

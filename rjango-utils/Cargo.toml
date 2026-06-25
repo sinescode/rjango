@@ -1,0 +1,12 @@
+[package]
+name = "rjango-utils"
+version.workspace = true
+edition.workspace = true
+description = "Utility functions (crypto, date formats, etc.)"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+regex.workspace = true

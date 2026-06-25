@@ -1,0 +1,14 @@
+[package]
+name = "rjango-middleware"
+version.workspace = true
+edition.workspace = true
+description = "Middleware: CSRF, security, sessions, messages"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }
+rjango-utils = { path = "../rjango-utils" }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+regex.workspace = true
+tokio.workspace = true

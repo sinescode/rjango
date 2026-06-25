@@ -1,0 +1,11 @@
+[package]
+name = "rjango-views"
+version.workspace = true
+edition.workspace = true
+description = "View classes (base, generic)"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }
+rjango-urls = { path = "../rjango-urls" }
+serde.workspace = true
+serde_json.workspace = true

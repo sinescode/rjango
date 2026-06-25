@@ -1,0 +1,17 @@
+[package]
+name = "rjango-test"
+version.workspace = true
+edition.workspace = true
+description = "Test utilities — test client, test runner, test cases"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }
+rjango-server = { path = "../rjango-server" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+rjango-urls = { path = "../rjango-urls" }
+rjango-middleware = { path = "../rjango-middleware" }
+rjango-admin = { path = "../rjango-admin" }

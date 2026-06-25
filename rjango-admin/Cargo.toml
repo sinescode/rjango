@@ -1,0 +1,14 @@
+[package]
+name = "rjango-admin"
+version.workspace = true
+edition.workspace = true
+description = "Admin interface — auto-generated CRUD UI"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }
+rjango-urls = { path = "../rjango-urls" }
+rjango-forms = { path = "../rjango-forms" }
+rjango-templates = { path = "../rjango-templates" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

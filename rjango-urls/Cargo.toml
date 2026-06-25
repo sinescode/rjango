@@ -1,0 +1,11 @@
+[package]
+name = "rjango-urls"
+version.workspace = true
+edition.workspace = true
+description = "URL routing with path converters & reverse"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true

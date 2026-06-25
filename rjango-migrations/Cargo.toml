@@ -1,0 +1,14 @@
+[package]
+name = "rjango-migrations"
+version.workspace = true
+edition.workspace = true
+description = "Database migration system — detect, create, apply"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }
+rjango-orm = { path = "../rjango-orm" }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+tokio.workspace = true

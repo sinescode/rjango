@@ -1,0 +1,12 @@
+[package]
+name = "rjango-templates"
+version.workspace = true
+edition.workspace = true
+description = "Template engine with inheritance, filters, tags"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+tracing.workspace = true

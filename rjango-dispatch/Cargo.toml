@@ -1,0 +1,8 @@
+[package]
+name = "rjango-dispatch"
+version.workspace = true
+edition.workspace = true
+description = "Signal dispatcher"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }

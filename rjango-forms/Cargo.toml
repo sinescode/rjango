@@ -1,0 +1,13 @@
+[package]
+name = "rjango-forms"
+version.workspace = true
+edition.workspace = true
+description = "Form handling with validation and rendering"
+
+[dependencies]
+rjango-core = { path = "../rjango-core" }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+regex.workspace = true
+urlencoding.workspace = true

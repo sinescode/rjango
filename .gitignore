@@ -1,0 +1,9 @@
+target/
+.devin/
+*.swp
+*.swo
+*~
+.DS_Store
+.cargo/
+__pycache__/
+*.pyc
