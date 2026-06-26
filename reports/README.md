@@ -1,33 +1,33 @@
-# 📁 Rjango Reports Index
+# 📊 Rjango — Django 6.0.6 Coverage Reports
 
-This directory contains detailed Django 6.0.6 feature comparisons for the Rjango Rust port.
+> **Generated:** 2026-06-26  
+> **Overall coverage:** **41.1%** (251/611 Django API items)  
+> **Tests passing:** 1,784 — **0 failed**
 
 ## Reports
 
-| # | Report | Lines | Description |
-|---|--------|-------|-------------|
-| 1 | `gap-analysis.md` | ~200 | **Master gap analysis** — all categories, priority matrix, quick wins |
-| 2 | `django-core-features.md` | ~400 | Core: paginator, exceptions, validators, cache, files, handlers, serializers, apps, conf, dispatch, shortcuts, utils |
-| 3 | `django-orm-features.md` | ~350 | ORM: model system, fields, QuerySet, lookups, aggregates, expressions, backends, migrations |
-| 4 | `django-templates-features.md` | ~200 | Templates: engine, context, loaders, 60+ filters, 28+ tags, library |
-| 5 | `django-forms-auth-middleware-features.md` | ~350 | Forms: fields, widgets, formsets; Auth: users, permissions, backends; Middleware: CSRF, session, security |
-| 6 | `django-urls-views-test-features.md` | ~250 | URLs: routing, converters, reverse; Views: generic class-based; Test: client, runner, assertions |
-| 7 | `django-contrib-features.md` | ~250 | Contrib: admin, contenttypes, postgres, staticfiles, humanize, sitemaps, etc. |
+| Report | File | Lines |
+|--------|------|-------|
+| 🏆 **Master Comparison** (all modules) | [`django-comparison-master.md`](django-comparison-master.md) | 171 |
+| 📉 **Gap Analysis** (prioritized) | [`gap-analysis.md`](gap-analysis.md) | 187 |
+| 🏗 **Core** (exceptions, signals, signing, cache, validators, mail, etc.) | [`django-core-features.md`](django-core-features.md) | 145 |
+| 🗄 **ORM** (models, fields, QuerySets, lookups, migrations) | [`django-orm-features.md`](django-orm-features.md) | 165 |
+| 🎨 **Templates** (engine, tags, filters, loaders) | [`django-templates-features.md`](django-templates-features.md) | 137 |
+| 🔐 **Forms, Auth, Middleware, Sessions, Messages** | [`django-forms-auth-middleware-features.md`](django-forms-auth-middleware-features.md) | 214 |
+| 🌐 **URLs, Views, Test, CLI** | [`django-urls-views-test-features.md`](django-urls-views-test-features.md) | 145 |
+| 🧩 **Contrib** (admin, postgres, gis, sites, sitemaps, etc.) | [`django-contrib-features.md`](django-contrib-features.md) | 198 |
 
-## Legend
+## Key Stats
 
-| Status | Meaning |
-|--------|---------|
-| ✅ | Complete — matches Django API |
-| ⚠️ | Partial — basic version exists, missing features |
-| ❌ | Missing — not implemented |
-| N/A | Not applicable |
+- **Middleware:** 100% complete ✅
+- **Template Filters:** 50/53 (94%) ✅
+- **URL Dispatcher:** 75% 🟡
+- **Auth:** 60% 🟡
+- **Templates:** 73% 🟡
+- **Views:** 15% ❌
+- **ORM:** 24% ❌
+- **Forms:** 15% ❌
 
-## Quick Stats
+## Roadmap
 
-- **Django 6.0.6**: ~679 Python source files, ~30 packages
-- **Rjango**: 98 Rust source files, 16 crates, 17,414 lines
-- **API coverage**: ~22% of Django's public API surface
-- **Template features**: ~75% coverage (best category)
-- **ORM features**: ~15% coverage (worst critical category)
-- **Zero coverage**: Caching, Mail, Signing, GIS, PostgreSQL contrib
+See [`ROADMAP.md`](../ROADMAP.md) for the full implementation plan with phases.

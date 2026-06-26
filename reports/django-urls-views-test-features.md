@@ -1,303 +1,225 @@
-# Django 6.0.6 URLs, Views, Test & Management — Feature Comparison with Rjango
+# Django 6.0.6 URLs, Views, Test, CLI — Feature Comparison with Rjango
 
-> **Django modules analyzed:** `django.urls`, `django.views`, `django.test`, `django.core.management`, `django.dispatch`
-
----
-
-## 1. URL Routing (`django.urls`)
-
-### Functions
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `path(route, view, kwargs, name)` | `register_route()` | ✅ | Present |
-| `re_path(route, view, kwargs, name)` | ❌ Missing | Regex-based paths |
-| `include(arg, namespace)` | `include()` | ✅ | Present |
-| `reverse(viewname, args, kwargs)` | `reverse()` | ❌ Missing | Not implemented |
-| `reverse_lazy(viewname, args, kwargs)` | ❌ Missing | Lazy version |
-| `resolve(path, urlconf)` | `resolve_url()` | ✅ | Present |
-| `clear_url_caches()` | ❌ Missing | |
-| `set_script_prefix(prefix)` | ❌ Missing | |
-| `get_script_prefix()` | ❌ Missing | |
-| `is_valid_path(path)` | ❌ Missing | |
-| `translate_url(url, lang_code)` | ❌ Missing | |
-
-### URL Patterns & Resolvers
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class URLPattern(pattern, view, name)` | `Route` / `UrlPattern` | ✅ | Present |
-| `class URLResolver(pattern, view, namespace)` | `URLResolver` | ✅ | Present |
-| `class RoutePattern(route)` | ❌ Missing | Modern path-based pattern |
-| `class RegexPattern(regex)` | ❌ Missing | Old regex-based pattern |
-| `class ResolverMatch(func, args, kwargs, ...)` | ❌ Missing | Result of resolve() |
-| `class LocalePrefixPattern` | ❌ Missing | |
-| `get_resolver(urlconf)` | ❌ Missing | |
-
-### URL Converters
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class IntConverter` | `IntConverter` | ✅ | |
-| `class StringConverter` | `StringConverter` | ✅ | |
-| `class UUIDConverter` | `UUIDConverter` | ✅ | |
-| `class SlugConverter(StringConverter)` | `SlugConverter` | ✅ | |
-| `class PathConverter(StringConverter)` | ❌ Missing | Matches any path including / |
-| `register_converter(converter, type_name)` | `register_converter()` | ✅ | |
-| `get_converters()` | ❌ Missing | |
-
-### URL Conf
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `module-level urlpatterns` | ❌ Missing | Django uses module-level lists |
-| `app_name in urlconf` | ❌ Missing | URL namespacing by app |
+> **Django modules analyzed:** `django.urls`, `django.views.generic`, `django.views.decorators`, `django.test`, `django.core.management`
+> **Last updated:** 2026-06-26
 
 ---
 
-## 2. Generic Views (`django.views.generic`)
+## Overview
 
-### Base Views
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class View` | `View` | ✅ | |
-| `View.as_view()` | ❌ Missing | Class-based view entry point |
-| `View.dispatch(request, *args, **kwargs)` | ✅ | |
-| `View.setup(request, *args, **kwargs)` | ❌ Missing | |
-| `View.http_method_not_allowed(request)` | ❌ Missing | |
-| `View.options(request)` | ❌ Missing | |
-| `class ContextMixin` | ❌ Missing | |
-| `ContextMixin.get_context_data(**kwargs)` | ❌ Missing | |
-| `class TemplateResponseMixin` | `TemplateView` | ❌ Missing | Not a separate mixin |
-| `TemplateResponseMixin.template_name` | ✅ | |
-| `TemplateResponseMixin.render_to_response(context)` | ❌ Missing | |
-| `class RedirectView(View)` | ❌ Missing | |
-
-### Template View
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class TemplateView(TemplateResponseMixin, View)` | `TemplateView` | ⚠️ Partial | Rjango has TemplateView but simpler |
-| `TemplateView.get(request, *args, **kwargs)` | ✅ | |
-| `TemplateView.get_context_data(**kwargs)` | ❌ Missing | |
-
-### List View
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class ListView` | `ListView` | ⚠️ Partial | |
-| `class MultipleObjectMixin(ContextMixin)` | ❌ Missing | |
-| `MultipleObjectMixin.model` | ✅ | |
-| `MultipleObjectMixin.queryset` | ❌ Missing | |
-| `MultipleObjectMixin.paginate_by` | ❌ Missing | |
-| `MultipleObjectMixin.get_queryset()` | ❌ Missing | |
-| `MultipleObjectMixin.get_context_data(**kwargs)` | ❌ Missing | |
-| `class MultipleObjectTemplateResponseMixin` | ❌ Missing | |
-
-### Detail View
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class DetailView` | `DetailView` | ⚠️ Partial | |
-| `class SingleObjectMixin(ContextMixin)` | ❌ Missing | |
-| `SingleObjectMixin.get_object(queryset)` | ❌ Missing | |
-| `SingleObjectMixin.get_context_data(**kwargs)` | ❌ Missing | |
-| `class SingleObjectTemplateResponseMixin` | ❌ Missing | |
-
-### Form Views
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class FormView` | `FormView` | ⚠️ Partial | |
-| `class FormMixin(ContextMixin)` | ❌ Missing | |
-| `FormMixin.get_form(form_class)` | ❌ Missing | |
-| `FormMixin.get_success_url()` | ❌ Missing | |
-| `FormMixin.form_valid(form)` | ❌ Missing | |
-| `FormMixin.form_invalid(form)` | ❌ Missing | |
-| `class ProcessFormView(View)` | ❌ Missing | |
-
-### Create/Update/Delete Views
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class CreateView` | `CreateView` | ⚠️ Partial | |
-| `class BaseCreateView(ModelFormMixin, ProcessFormView)` | ❌ Missing | |
-| `class UpdateView` | `UpdateView` | ⚠️ Partial | |
-| `class BaseUpdateView(ModelFormMixin, ProcessFormView)` | ❌ Missing | |
-| `class DeleteView` | `DeleteView` | ⚠️ Partial | |
-| `class DeletionMixin` | ❌ Missing | |
-| `class ModelFormMixin(FormMixin, SingleObjectMixin)` | ❌ Missing | |
-
-### Date-Based Views
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class ArchiveIndexView` | ❌ Missing | |
-| `class YearArchiveView` | ❌ Missing | |
-| `class MonthArchiveView` | ❌ Missing | |
-| `class WeekArchiveView` | ❌ Missing | |
-| `class DayArchiveView` | ❌ Missing | |
-| `class TodayArchiveView` | ❌ Missing | |
-| `class DateDetailView` | ❌ Missing | |
-| All date mixins (YearMixin, MonthMixin, DayMixin, WeekMixin, DateMixin) | ❌ Missing | |
-
-### View Decorators
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `require_http_methods(methods)` | `require_http_methods()` | ✅ | |
-| `require_GET()` | `require_get()` | ✅ | |
-| `require_POST()` | `require_post()` | ✅ | |
-| `require_safe()` | ❌ Missing | |
-| `gzip_page()` | ❌ Missing | |
-| `never_cache()` | ❌ Missing | |
-| `csrf_exempt()` | ❌ Missing | |
-| `csrf_protect()` | ❌ Missing | |
-| `csrf_input()` | ❌ Missing | |
+| Category | Coverage | Status |
+|----------|----------|--------|
+| **URL Dispatcher** | 9/12 = **75%** | 🟢 Strong |
+| **Views (Class-based)** | 7/48 = **15%** | 🔴 Weak |
+| **View Decorators** | 4/8 = **50%** | 🟡 Partial |
+| **Test Utilities** | 6/14 = **43%** | 🟡 Partial |
+| **CLI Commands** | 13/27 = **48%** | 🟡 Partial |
 
 ---
 
-## 3. Test Framework (`django.test`)
+## ✅ URL Dispatcher — 75%
 
-### Test Client
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class Client` | `TestClient` | ⚠️ Partial | |
-| `Client.get(path, data)` | ✅ | |
-| `Client.post(path, data)` | ✅ | |
-| `Client.head(path, data)` | ❌ Missing | |
-| `Client.options(path, data)` | ❌ Missing | |
-| `Client.put(path, data, content_type)` | ❌ Missing | |
-| `Client.patch(path, data, content_type)` | ❌ Missing | |
-| `Client.delete(path, data)` | ❌ Missing | |
-| `Client.trace(path)` | ❌ Missing | |
-| `Client.login(username, password)` | ❌ Missing | |
-| `Client.logout()` | ❌ Missing | |
-| `Client.force_login(user)` | ❌ Missing | |
-| `Client.session` | ❌ Missing | |
-| `Client.handler` | ❌ Missing | |
-| `class AsyncClient` | ❌ Missing | |
-| `class RequestFactory` | ❌ Missing | |
-| `class AsyncRequestFactory` | ❌ Missing | |
+### Implemented
+- `resolve()` — URL pattern matching
+- `reverse()` — URL reversing with args/kwargs
+- `include()` — Include sub-URL configurations
+- `set_urlconf()` / `get_urlconf()` — Thread-local URL config
+- `clear_url_caches()` — Reset URL cache
+- `set_script_prefix()` / `get_script_prefix()` — Script name support
+- `LazyString` — Deferred string evaluation
+- URLPattern, ResolverMatch, URLResolver with namespace/app_name
+- Path converters: `IntConverter`, `StrConverter`, `SlugConverter`, `UUIDConverter`, `AnyPathConverter`
+- `path()` — Django-style path routing
+- `re_path()` — Regex-based routing
+- `default_converters()` — Built-in converter registry
 
-### Test Cases
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class SimpleTestCase(unittest.TestCase)` | `RjangoTestCase` | ⚠️ Partial | |
-| `SimpleTestCase.assertContains(response, text)` | ❌ Missing | |
-| `SimpleTestCase.assertNotContains(response, text)` | ❌ Missing | |
-| `SimpleTestCase.assertTemplateUsed(response)` | ❌ Missing | |
-| `SimpleTestCase.assertTemplateNotUsed(response)` | ❌ Missing | |
-| `SimpleTestCase.assertRaisesMessage()` | ❌ Missing | |
-| `SimpleTestCase.assertFieldOutput()` | ❌ Missing | |
-| `SimpleTestCase.assertHTMLEqual()` | ❌ Missing | |
-| `SimpleTestCase.assertHTMLNotEqual()` | ❌ Missing | |
-| `SimpleTestCase.assertInHTML()` | ❌ Missing | |
-| `SimpleTestCase.assertJSONEqual()` | ❌ Missing | |
-| `SimpleTestCase.assertJSONNotEqual()` | ❌ Missing | |
-| `SimpleTestCase.assertURLEqual()` | ❌ Missing | |
-| `class TransactionTestCase(SimpleTestCase)` | ❌ Missing | |
-| `class TestCase(TransactionTestCase)` | ❌ Missing | |
-| `TestCase.setUpTestData()` | ❌ Missing | |
-| `TestCase.fixtures` | ❌ Missing | |
-| `class LiveServerTestCase` | ❌ Missing | |
-| `skipIfDBFeature(*features)` | ❌ Missing | |
-| `skipUnlessDBFeature(*features)` | ❌ Missing | |
-
-### Test Runner
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class DiscoverRunner` | `TestRunner` | ⚠️ Partial | |
-| `DiscoverRunner.setup_test_environment()` | ❌ Missing | |
-| `DiscoverRunner.build_suite()` | ❌ Missing | |
-| `DiscoverRunner.run_tests(test_labels)` | ✅ | |
-| `DiscoverRunner.setup_databases()` | ❌ Missing | |
-| `DiscoverRunner.teardown_databases()` | ❌ Missing | |
-| `DiscoverRunner.run_checks()` | ❌ Missing | |
-| `DiscoverRunner.suite_result()` | ❌ Missing | |
-| `ParallelTestSuite` | ❌ Missing | |
-| `Shuffler` | ❌ Missing | |
-| `DebugSQLTextTestResult` | ❌ Missing | |
-| `PDBDebugResult` | ❌ Missing | |
-
-### Selenium Tests
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class SeleniumTestCase` | ❌ Missing | |
-| `StaticLiveServerTestCase` | ❌ Missing | |
+### Missing
+- `RegexPattern` as standalone pattern class
+- `URLPattern.reverse()` for named patterns
+- `register_converter()` for custom converters
 
 ---
 
-## 4. Management Commands (`django.core.management`)
+## 🟡 Generic Views — 15%
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `call_command(name, *args, **options)` | ❌ Missing | |
-| `class BaseCommand` | ❌ Missing | |
-| `BaseCommand.handle(*args, **options)` | ❌ Missing | |
-| `BaseCommand.add_arguments(parser)` | ❌ Missing | |
-| `BaseCommand.style` | ❌ Missing | |
-| `Command.handle()` | ❌ Missing | |
-| `command: runserver` | ✅ | |
-| `command: startproject` | ✅ | |
-| `command: startapp` | ✅ | |
-| `command: migrate` | ✅ | |
-| `command: makemigrations` | ✅ | |
-| `command: showmigrations` | ✅ | |
-| `command: shell` | ✅ | |
-| `command: dbshell` | ✅ | |
-| `command: createsuperuser` | ✅ | |
-| `command: collectstatic` | ✅ | |
-| `command: test` | ✅ | |
-| `command: check` | ✅ | |
-| `command: validate` | ✅ | |
-| `command: dumpdata` | ❌ Missing | |
-| `command: loaddata` | ❌ Missing | |
-| `command: inspectdb` | ❌ Missing | |
-| `command: sqlmigrate` | ❌ Missing | |
-| `command: sqlflush` | ❌ Missing | |
-| `command: sqlsequencereset` | ❌ Missing | |
-| `command: squashmigrations` | ❌ Missing | |
-| `command: optimizemigration` | ❌ Missing | |
-| `command: flush` | ❌ Missing | |
-| `command: diffsettings` | ❌ Missing | |
-| `command: sendtestemail` | ❌ Missing | |
-| `command: compilemessages` | ❌ Missing | i18n compilation |
-| `command: makemessages` | ❌ Missing | i18n string extraction |
-| `command: testserver` | ❌ Missing | |
-| `command: createcachetable` | ❌ Missing | |
+### ✅ Implemented (7 APIs)
+
+#### Base Views
+| View | Status |
+|------|--------|
+| `View` trait | ✅ |
+| `TemplateView` | ✅ |
+| `RedirectView` | ✅ |
+| `ContextMixin` | ✅ |
+| `TemplateResponseMixin` | ✅ |
+
+#### Mixins
+| Mixin | Status |
+|-------|--------|
+| `MultipleObjectMixin` | ✅ |
+| `SingleObjectMixin` | ✅ |
+| `FormMixin` | ✅ |
+
+#### Detail Views
+| View | Status |
+|------|--------|
+| `DetailView` | ✅ |
+
+### ❌ Not Implemented (41 APIs)
+
+#### List Views
+| View | Priority |
+|------|----------|
+| `ListView` with full paginated context | 🔴 High |
+| `MultipleObjectTemplateResponseMixin` | 🟡 Medium |
+
+#### Edit Views (critical)
+| View | Priority |
+|------|----------|
+| `FormView` | 🔴 High |
+| `CreateView` | 🔴 High |
+| `UpdateView` | 🔴 High |
+| `DeleteView` | 🔴 High |
+| `DeletionMixin` | 🟡 Medium |
+| `ModelFormMixin` (form → model save) | 🔴 High |
+| `BaseFormView`, `BaseCreateView`, `BaseUpdateView`, `BaseDeleteView` | 🔴 High |
+| `ProcessFormView` | 🟡 Medium |
+
+#### Date-Based Archive Views
+| View | Priority |
+|------|----------|
+| `ArchiveIndexView` | 🔴 High |
+| `YearArchiveView` | 🔴 High |
+| `MonthArchiveView` | 🔴 High |
+| `WeekArchiveView` | 🟡 Medium |
+| `DayArchiveView` | 🟡 Medium |
+| `TodayArchiveView` | 🟡 Medium |
+| `DateDetailView` | 🟡 Medium |
+| `DateMixin`, `YearMixin`, `MonthMixin`, `WeekMixin`, `DayMixin` | 🟡 Medium |
+| `BaseDateListView`, `BaseArchiveIndexView`, etc. (6 base classes) | 🟡 Medium |
+
+#### Default Views
+| View | Priority |
+|------|----------|
+| `bad_request` (400) | 🟢 Low |
+| `permission_denied` (403) | 🟢 Low |
+| `page_not_found` (404) | 🟢 Low |
+| `server_error` (500) | 🟢 Low |
 
 ---
 
-## 5. Server (`django.core.servers`)
+## 🟡 View Decorators — 50%
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `basehttp.WSGIServer` | ❌ Missing | |
-| `basehttp.ServerHandler` | ❌ Missing | |
-| `basehttp.WSGIRequestHandler` | ❌ Missing | |
-| `class Server(HTTPServer)` | `Server` | ⚠️ Partial | Rjango has basic HTTP server |
+### ✅ Implemented
+| Decorator | Status |
+|-----------|--------|
+| `never_cache` | ✅ |
+| `require_POST` | ✅ |
+| `require_GET` | ✅ |
+| `require_http_methods` | ✅ |
+
+### ❌ Missing
+| Decorator | Priority |
+|-----------|----------|
+| `require_safe` | 🟢 Low |
+| `cache_page` | 🟡 Medium |
+| `cache_control` | 🟡 Medium |
+| `csrf_exempt` | ✅ (exists in auth) |
+| `gzip_page` | 🟢 Low |
+| `xframe_options_deny` | 🟢 Low |
+| `xframe_options_sameorigin` | 🟢 Low |
+| `xframe_options_exempt` | 🟢 Low |
+| `vary_on_headers` / `vary_on_cookie` | 🟢 Low |
+| `sensitive_variables` / `sensitive_post_parameters` | 🟢 Low |
+| `@method_decorator` | 🟡 Medium |
 
 ---
 
-## Summary
+## 🟡 Test Utilities — 43%
 
-### Rjango URL/Views/Test Features (✅ Complete)
-- ✅ Path converters (int, str, slug, uuid)
-- ✅ URL routing with include()
-- ✅ Basic View/class-based views
-- ✅ TemplateView, ListView, DetailView, FormView, CreateView, UpdateView, DeleteView
-- ✅ HTTP method decorators (require_http_methods, require_GET, require_POST)
-- ✅ TestClient with GET/POST
-- ✅ TestCase base class
-- ✅ TestRunner
-- ✅ 13 management commands
+### ✅ Implemented
 
-### Missing Features (❌)
-- ❌ `reverse()` URL resolver — **critical gap**
-- ❌ Regex-based URL patterns
-- ❌ `re_path()` support
-- ❌ Date-based views (archive index, year/month/day/week archives)
-- ❌ RedirectView
-- ❌ Full ModelFormMixin (no DB-backed view operations)
-- ❌ DeletionMixin
-- ❌ Full assertion helpers (assertContains, assertTemplateUsed, etc.)
-- ❌ Async client
-- ❌ Transaction/live server test cases
-- ❌ Parallel test execution
-- ❌ Selenium tests
-- ❌ BaseCommand framework with argument parsing
-- ❌ dumpdata/loaddata (serialization)
-- ❌ inspectdb (database introspection)
-- ❌ sqlmigrate/sqlflush/sqlsequencereset
-- ❌ squashmigrations
-- ❌ i18n commands (compilemessages, makemessages)
+#### Test Client
+- `Client` struct with `GET()`, `POST()`, `PUT()`, `PATCH()`, `DELETE()` methods
+- Header and cookie support
+- `ClientResponse` with body, status, headers
+
+#### Test Runner
+- `TestRunner` with `run()` returning `TestResult`
+- Test discovery and execution
+- Result summary
+
+#### TestCase
+- `TestCase` struct with `setup()`, `teardown()`, `run_test()`
+- `assert_equal()`, `assert_true()`, `assert_false()`
+
+#### Assert Helpers
+- `assert_contains()`, `assert_not_contains()`
+- `assert_template_used()`, `assert_redirects()`
+- `assert_status()`, `override_settings()`
+
+### ❌ Missing
+
+| Feature | Priority |
+|---------|----------|
+| `SimpleTestCase`, `TransactionTestCase` | 🟡 Medium |
+| `RequestFactory` (build Request objects) | 🔴 High |
+| `Client.login()` / `Client.force_login()` | 🔴 High |
+| `modify_settings` decorator | 🟢 Low |
+| `tag_test` decorator | 🟢 Low |
+| `Client.session()` manipulation | 🟡 Medium |
+| Test database setup/teardown | 🟡 Medium |
+
+---
+
+## 🟡 CLI Commands — 48%
+
+### ✅ Implemented (13 of 27)
+
+| Command | Status | Notes |
+|---------|--------|-------|
+| `runserver` | ✅ | Basic dev server |
+| `migrate` | ✅ | With `MigrationRunner.apply()` |
+| `makemigrations` | ✅ | With `SchemaDetector` |
+| `test` | ✅ | Test runner integration |
+| `startapp` | ✅ | App scaffold |
+| `startproject` | ✅ | Project scaffold |
+| `shell` | ✅ | With auto-import options |
+| `dbshell` | ✅ | DB shell |
+| `showmigrations` | ✅ | Migration listing |
+| `diffsettings` | ✅ | Settings diff |
+| `check` | ✅ | System checks |
+| `sqlmigrate` | ✅ | SQL output |
+| `sqlflush` | ✅ | SQL flush output |
+
+### ❌ Missing (14 commands)
+
+| Command | Priority | Notes |
+|---------|----------|-------|
+| `dumpdata` | 🔴 High | Serialize DB to JSON/XML |
+| `loaddata` | 🔴 High | Load fixtures |
+| `inspectdb` | 🟡 Medium | Reverse-engineer DB → models |
+| `flush` | 🟡 Medium | Clear DB data |
+| `compilemessages` | 🟡 Medium | .po → .mo compilation |
+| `makemessages` | 🟡 Medium | Extract translatable strings |
+| `squashmigrations` | 🟢 Low | Reduce migration count |
+| `optimizemigration` | 🟢 Low | Optimize a migration |
+| `sendtestemail` | 🟢 Low | Test email config |
+| `testserver` | 🟢 Low | Test data server |
+| `createcachetable` | 🟢 Low | Create cache table |
+| `dumpscript` | 🟢 Low | Dump as Python script |
+| `clear_cache` | 🟢 Low | Clear cache |
+| `remove_stale_contenttypes` | 🟢 Low | Clean content types |
+
+---
+
+## 📊 Coverage Summary
+
+| Submodule | Django | Rjango | % | Priority for Improvement |
+|-----------|--------|--------|---|-------------------------|
+| URL Dispatcher | 12 | 9 | **75%** | Low |
+| Views (generic) | 48 | 7 | **15%** | **High** |
+| View Decorators | 8 | 4 | **50%** | Low |
+| Test Utilities | 14 | 6 | **43%** | Medium |
+| CLI Commands | 27 | 13 | **48%** | Medium |
+| **Total** | **109** | **39** | **36%** | |

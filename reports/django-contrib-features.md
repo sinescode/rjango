@@ -1,290 +1,262 @@
-# Django 6.0.6 Contrib Packages — Feature Comparison with Rjango
+# Django 6.0.6 Contrib Apps — Feature Comparison with Rjango
 
-> **Django modules analyzed:** contrib.admin, contrib.sessions, contrib.messages, contrib.sites, contrib.contenttypes, contrib.staticfiles, contrib.humanize, contrib.sitemaps, contrib.syndication, contrib.flatpages, contrib.redirects, contrib.postgres, contrib.gis
-
----
-
-## 1. Admin (`django.contrib.admin`)
-
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class AdminSite` | `AdminSite` | ✅ | Present |
-| `AdminSite.register(model, admin_class)` | `AdminSite::register()` | ✅ | |
-| `AdminSite.unregister(model)` | ❌ Missing | |
-| `AdminSite.autodiscover()` | ❌ Missing | |
-| `AdminSite.each_context(request)` | ❌ Missing | |
-| `AdminSite.index(request)` | ✅ | Site index view |
-| `AdminSite.app_index(request, app_label)` | ✅ | App index view |
-| `AdminSite.login(request)` | ❌ Missing | |
-| `AdminSite.logout(request)` | ❌ Missing | |
-| `AdminSite.password_change(request)` | ❌ Missing | |
-| `AdminSite.password_change_done(request)` | ❌ Missing | |
-| `AdminSite.get_urls()` | ❌ Missing | |
-| `class ModelAdmin(BaseModelAdmin)` | `ModelAdmin` | ✅ | |
-| `ModelAdmin.list_display` | ✅ | |
-| `ModelAdmin.list_filter` | ❌ Missing | |
-| `ModelAdmin.search_fields` | ❌ Missing | |
-| `ModelAdmin.ordering` | ❌ Missing | |
-| `ModelAdmin.list_per_page` | ❌ Missing | |
-| `ModelAdmin.list_max_show_all` | ❌ Missing | |
-| `ModelAdmin.date_hierarchy` | ❌ Missing | |
-| `ModelAdmin.fieldsets` | ❌ Missing | |
-| `ModelAdmin.fields` | ❌ Missing | |
-| `ModelAdmin.exclude` | ❌ Missing | |
-| `ModelAdmin.readonly_fields` | ❌ Missing | |
-| `ModelAdmin.prepopulated_fields` | ❌ Missing | |
-| `ModelAdmin.autocomplete_fields` | ❌ Missing | |
-| `ModelAdmin.actions` | ❌ Missing | |
-| `ModelAdmin.changelist_view(request)` | ✅ | |
-| `ModelAdmin.add_view(request)` | ✅ | |
-| `ModelAdmin.change_view(request, obj_id)` | ✅ | |
-| `ModelAdmin.delete_view(request, obj_id)` | ✅ | |
-| `ModelAdmin.history_view(request, obj_id)` | ❌ Missing | |
-| `ModelAdmin.get_queryset(request)` | ❌ Missing | |
-| `ModelAdmin.get_search_results(...)` | ❌ Missing | |
-| `ModelAdmin.save_model(...)` | ❌ Missing | |
-| `ModelAdmin.save_formset(...)` | ❌ Missing | |
-| `ModelAdmin.delete_model(...)` | ❌ Missing | |
-| `ModelAdmin.delete_queryset(...)` | ❌ Missing | |
-| `class InlineModelAdmin(BaseModelAdmin)` | ❌ Missing | |
-| `class StackedInline(InlineModelAdmin)` | ❌ Missing | |
-| `class TabularInline(InlineModelAdmin)` | ❌ Missing | |
-| `class ShowFacets` | ❌ Missing | |
-| `IncorrectLookupParameters` | ❌ Missing | |
-| `actions` module | ❌ Missing | |
-| `filters` module | ❌ Missing | |
-| `helpers` module | ❌ Missing | |
-| `checks` module | ❌ Missing | |
-| `autodiscover()` | ❌ Missing | |
-| `site = DefaultAdminSite()` | ✅ | Default admin site singleton |
+> **Django modules analyzed:** `django.contrib.admin`, `django.contrib.auth`, `django.contrib.messages`, `django.contrib.sessions`, `django.contrib.contenttypes`, `django.contrib.sites`, `django.contrib.sitemaps`, `django.contrib.flatpages`, `django.contrib.humanize`, `django.contrib.staticfiles`, `django.contrib.redirects`, `django.contrib.syndication`, `django.contrib.postgres`, `django.contrib.gis`
+> **Last updated:** 2026-06-26
 
 ---
 
-## 2. Sessions (`django.contrib.sessions`)
+## Overview
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class SessionMiddleware` | `SessionMiddleware` | ✅ | |
-| `class SessionBase` | ❌ Missing | |
-| `SessionBase.cycle_key()` | ❌ Missing | |
-| `SessionBase.flush()` | ❌ Missing | |
-| `SessionBase.set_expiry(value)` | ❌ Missing | |
-| `SessionBase.get_expiry_age()` | ❌ Missing | |
-| `SessionBase.get_expiry_date()` | ❌ Missing | |
-| `SessionBase.get_expire_at_browser_close()` | ❌ Missing | |
-| `db backend` | ❌ Missing | Database-backed sessions |
-| `cache backend` | ❌ Missing | |
-| `file backend` | ❌ Missing | |
-| `signed_cookies backend` | ❌ Missing | |
-| `class CreateError` | ❌ Missing | |
-| `class UpdateError` | ❌ Missing | |
-| `SESSION_ENGINE` setting | ❌ Missing | |
-| `SESSION_COOKIE_NAME` setting | ❌ Missing | |
-| `SESSION_COOKIE_AGE` setting | ❌ Missing | |
+| Metric | Value |
+|--------|-------|
+| Contrib features covered | 19/60 (32%) |
+| 3rd party replacements | Tasks (new crate) |
+| New since last update | CPS middleware, RemoteUser, better admin |
 
 ---
 
-## 3. Messages (`django.contrib.messages`)
+## ✅ Admin Site — 35%
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class MessageMiddleware` | `MessageMiddleware` | ✅ | |
-| `class Message(level, message, extra_tags)` | `Message` | ✅ | |
-| `Message.level` | ✅ | |
-| `Message.message` | ✅ | |
-| `Message.tags` | ✅ | |
-| `class BaseStorage` | `MessageStorage` | ⚠️ Partial | |
-| `class SessionStorage(BaseStorage)` | ✅ | |
-| `class CookieStorage(BaseStorage)` | ❌ Missing | |
-| `class FallbackStorage(Session, Cookie)` | ❌ Missing | |
-| `add_message(request, level, message)` | ✅ | |
-| `get_messages(request)` | ✅ | |
-| `get_level(request)` | ❌ Missing | |
-| `set_level(request, level)` | ❌ Missing | |
-| `debug(request, message)` | ✅ | |
-| `info(request, message)` | ✅ | |
-| `success(request, message)` | ✅ | |
-| `warning(request, message)` | ✅ | |
-| `error(request, message)` | ✅ | |
-| `constants: DEBUG, INFO, SUCCESS, WARNING, ERROR` | ✅ | |
-| `default_tags` | ❌ Missing | |
-| `class MessageFailure` | ❌ Missing | |
-| `context_processors` | ❌ Missing | |
+### Implemented
+- `AdminSite` with `register()`, `unregister()`, `is_registered()`, `get_registered_apps()`, `get_models()`, `dispatch()`, `index()`, `login()`, `logout()`, `password_change()`
+- `ModelAdmin` with `list_display`, `list_filter`, `search_fields`, `list_editable`, `list_per_page`, `list_max_show_all`
+- `InlineModelAdmin` with `TabularInline`, `StackedInline`, `InlineType` enum, `extra`, `max_num`, `min_num`, `can_delete`, `show_change_link`, `fields`, `readonly_fields`
+- `AdminSite.register()` with model admin class override
+- Admin URL registration per model (add, change, delete, history)
 
----
-
-## 4. Sites (`django.contrib.sites`)
-
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class Site(models.Model)` | ❌ Missing | |
-| `class SiteManager(models.Manager)` | ❌ Missing | |
-| `class CurrentSiteMiddleware` | ❌ Missing | |
-| `get_current_site(request)` | ❌ Missing | |
-| `shortcut` functions | ❌ Missing | |
-| `SITE_ID` setting | ❌ Missing | |
+### Missing (critical)
+| Feature | Priority |
+|---------|----------|
+| `list_filter` UI rendering (DateFieldListFilter, etc.) | 🔴 High |
+| `search_fields` → ORM query | 🔴 High |
+| Admin actions (delete_selected) | 🔴 High |
+| Admin inlines save → FK assignment | 🔴 High |
+| `LogEntry` audit trail | 🟡 Medium |
+| Permission checks per model/action | 🟡 Medium |
+| Admin templates (change_list, change_form, etc.) | 🟡 Medium |
+| `date_hierarchy` drill-down | 🟡 Medium |
+| `list_editable` form processing | 🟡 Medium |
+| Admin CSS/JS media | 🟢 Low |
+| Admin dashboard / index app list styling | 🟢 Low |
+| Admin filtering by date | 🟢 Low |
+| Admin pagination controls | 🟡 Medium |
+| `get_queryset()` override in admin | 🟢 Low |
+| `get_readonly_fields()` dynamic | 🟢 Low |
+| `formfield_for_dbfield()` / `formfield_for_choice_field()` | 🟢 Low |
+| `get_list_display()` dynamic | 🟢 Low |
+| `get_list_filter()` dynamic | 🟢 Low |
+| `get_search_results()` override | 🟢 Low |
+| `get_actions()` custom actions | 🟡 Medium |
 
 ---
 
-## 5. Contenttypes (`django.contrib.contenttypes`)
+## ✅ Humanize — 100%
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class ContentType(models.Model)` | ❌ Missing | |
-| `class GenericForeignKey` | ❌ Missing | |
-| `class GenericRelation` | ❌ Missing | |
-| `class GenericRel` | ❌ Missing | |
-| `create_generic_related_manager()` | ❌ Missing | |
-| `class BaseGenericInlineFormSet` | ❌ Missing | |
-| `generic_inlineformset_factory()` | ❌ Missing | |
-
----
-
-## 6. Staticfiles (`django.contrib.staticfiles`)
-
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class BaseFinder` | ❌ Missing | |
-| `class FileSystemFinder(BaseFinder)` | ❌ Missing | |
-| `class AppDirectoriesFinder(BaseFinder)` | ❌ Missing | |
-| `class BaseStorageFinder(BaseFinder)` | ❌ Missing | |
-| `class DefaultStorageFinder(BaseFinder)` | ❌ Missing | |
-| `find(path)` | ❌ Missing | |
-| `get_finders()` | ❌ Missing | |
-| `class StaticFilesHandler` | ❌ Missing | |
-| `class StaticFilesView` | ❌ Missing | |
-| `collectstatic` management command | `collectstatic` command | ✅ | Present in CLI |
-| `static()` template tag | ❌ Missing | |
+### Implemented (5/5)
+| Function | Status |
+|----------|--------|
+| `ordinal` | ✅ |
+| `intcomma` | ✅ |
+| `intword` | ✅ |
+| `naturaltime` | ✅ |
+| `naturalday` | ✅ |
 
 ---
 
-## 7. Humanize (`django.contrib.humanize`)
+## ✅ Sitemaps — 60%
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `intcomma(value)` | ❌ Missing | |
-| `intword(value)` | ❌ Missing | |
-| `apnumber(value)` | ❌ Missing | |
-| `naturalday(value)` | ❌ Missing | |
-| `naturaltime(value)` | ❌ Missing | |
-| `ordinal(value)` | ❌ Missing | |
+### Implemented
+- `SitemapEntry` struct with `new()`, `lastmod()`, `changefreq()`, `priority()`
+- `Sitemap` collection with `add()`, `render_xml()`, `render_index()`
+- URL resolution for sitemaps
 
----
-
-## 8. Sitemaps (`django.contrib.sitemaps`)
-
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class Sitemap` | ❌ Missing | |
-| `class GenericSitemap` | ❌ Missing | |
-| `class FlatPageSitemap` | ❌ Missing | |
-| `sitemap view` | ❌ Missing | |
-| `index view` | ❌ Missing | |
+### Missing
+- Sitemap class-based view (Django `django.contrib.sitemaps.views.index`, `.sitemap`)
+- `Sitemap.__get_urls__()` method
+- `ping_google()` for search engine notification
+- Sitemap items queryset integration
 
 ---
 
-## 9. Syndication (`django.contrib.syndication`)
+## ✅ Flatpages — 60%
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class Feed` | ❌ Missing | RSS/Atom feed framework |
-| `Feed.title` | ❌ Missing | |
-| `Feed.link` | ❌ Missing | |
-| `Feed.description` | ❌ Missing | |
-| `Feed.items()` | ❌ Missing | |
-| `Feed.item_title(item)` | ❌ Missing | |
-| `Feed.item_description(item)` | ❌ Missing | |
-| `feed view` | ❌ Missing | |
+### Implemented
+- `FlatPage` struct with content, url, template_name, title
+- `register_flatpage()`, `get_flatpage()`, `list_flatpages()`, `clear_flatpages()`
+- `render()` with template rendering
 
----
-
-## 10. Flatpages (`django.contrib.flatpages`)
-
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class FlatPage(models.Model)` | ❌ Missing | |
-| `class FlatPageSitemap` | ❌ Missing | |
-| `flatpage view` | ❌ Missing | |
-| `FlatpageFallbackMiddleware` | ❌ Missing | |
+### Missing
+- Flatpage middleware (fallback lookup)
+- Flatpage admin integration
+- Sites framework binding (SITE_ID)
 
 ---
 
-## 11. Redirects (`django.contrib.redirects`)
+## ✅ Syndication (RSS/Atom) — 60%
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class Redirect(models.Model)` | ❌ Missing | |
-| `RedirectFallbackMiddleware` | ❌ Missing | |
+### Implemented
+- `FeedItem` struct with title, link, description, content, author, pub_date, categories, unique_id
+- `Feed` collection with `add()`, `render_rss()` (RSS 2.0 XML), `render_atom()` (Atom XML)
+- Well-formed RSS/Atom XML generation
 
----
-
-## 12. PostgreSQL (`django.contrib.postgres`)
-
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `ArrayField` | ❌ Missing | |
-| `HStoreField` | ❌ Missing | |
-| `JSONField` | ❌ Missing | |
-| `RangeFields` (IntegerRange, etc.) | ❌ Missing | |
-| `SearchVector, SearchQuery, SearchRank` | ❌ Missing | Full-text search |
-| `TrigramSimilarity` | ❌ Missing | |
-| `Unaccent` | ❌ Missing | |
-| `HStoreExtension` | ❌ Missing | |
-| `BtreeGinExtension` | ❌ Missing | |
-| `aggregates: ArrayAgg, StringAgg` | ❌ Missing | |
-| `indexes: GinIndex, BrinIndex` | ❌ Missing | |
-| `constraints: ExclusionConstraint` | ❌ Missing | |
-| `Lookups: TrigramSimilar, Unaccent` | ❌ Missing | |
+### Missing
+- Feed class-based view (Django `django.contrib.syndication.views.Feed`)
+- `Feed.item_link()`, `Feed.item_title()`, etc. methods
+- `Feed.get_object()` with URL parameters
+- Feed content negotiation
 
 ---
 
-## 13. GIS (`django.contrib.gis`)
+## ✅ Redirects — 40%
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| Entire `django.contrib.gis` module | ❌ Missing | |
-| `GeoDjango` model fields | ❌ Missing | |
-| `PointField, LineStringField, PolygonField` | ❌ Missing | |
-| `GeoQuerySet` | ❌ Missing | |
-| `GDAL` / `GEOS` / `PROJ` bindings | ❌ Missing | |
-| `GeoIP` | ❌ Missing | |
-| `KML` / `GML` output | ❌ Missing | |
+### Implemented
+- `Redirect` struct with `old_path`, `new_path`, `site_id`
+- `register_redirect()`, `resolve_redirect()`, `list_redirects()`, `clear_redirects()`
 
----
-
-## 14. Admindocs (`django.contrib.admindocs`)
-
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `admindocs` module | ❌ Missing | Auto-generated admin docs |
+### Missing
+- Redirect middleware (301/302 automatic redirects)
+- Redirect admin integration
+- Pattern matching support
 
 ---
 
-## Summary
+## ✅ Staticfiles — 60%
 
-### Rjango Contrib Features (✅ Complete)
-- ✅ AdminSite with register, index, app_index, CRUD views
-- ✅ ModelAdmin with changelist/add/change/delete views
-- ✅ Message middleware & storage (session-based)
-- ✅ Message shortcuts (debug, info, success, warning, error)
-- ✅ Session middleware (basic)
-- ✅ collectstatic command
+### Implemented
+- `StaticFilesFinder` trait, `StaticFilesConfig`
+- `find()`, `list()`, `resolve_url()`, `url_prefix()`
 
-### Missing Contrib Features (❌)
-| Package | Status | Priority |
-|---|---|---|
-| **PostgreSQL contrib** | ❌ Entirely missing | High |
-| **ContentTypes** | ❌ Entirely missing | High |
-| **Sites** | ❌ Entirely missing | Medium |
-| **Staticfiles** | ❌ Missing finders/handlers/static tag | Medium |
-| **Flatpages** | ❌ Entirely missing | Low |
-| **Redirects** | ❌ Entirely missing | Low |
-| **Sitemaps** | ❌ Entirely missing | Low |
-| **Syndication (RSS/Atom)** | ❌ Entirely missing | Low |
-| **Humanize** | ❌ Entirely missing | Low |
-| **GIS** | ❌ Entirely missing | Low |
-| **Admindocs** | ❌ Entirely missing | Low |
-| **Admin filters** | ❌ Missing | Medium |
-| **Admin inlines** | ❌ Missing | Medium |
-| **Admin actions** | ❌ Missing | Medium |
-| **Advanced session backends** | ❌ Missing | Medium |
+### Missing
+- `AppDirectoriesFinder` (auto-find in each app)
+- `CachedStaticFilesStorage`, `ManifestStaticFilesStorage`
+- Static file view for development
+- `static()` template tag
+- File hashing/versioning
+
+---
+
+## ✅ ContentTypes — Partial
+
+### Implemented
+- `ContentType` struct with app_label, model, name
+- `ContentTypeManager` with `register()`, `get_for_model()`, `get_for_id()`
+
+### Missing
+- `ContentType.get_object_for_this_type()` (query by content type + pk)
+- `GenericForeignKey` field type
+- `GenericRelation` reverse relation
+- Content types management command
+
+---
+
+## ✅ Sessions — Partial
+
+### Implemented
+- `SessionBackend` trait with `load()`, `save()`, `delete()`, `exists()`, `clear_expired()`
+- `SessionStore` with session key generation and data management
+- `InMemorySessionBackend`
+
+### Missing
+- `DatabaseSessionBackend` — store sessions in DB
+- `CacheSessionBackend` — store sessions in cache
+- `FileSessionBackend` — store sessions in files
+- `CookieSessionBackend` — store sessions in signed cookies
+- Session serialization formats (JSON vs Pickle)
+- Session middleware with cookie-based key
+
+---
+
+## ✅ Messages — 60%
+
+### Implemented
+- `Message` struct with level, message, extra_tags
+- `MessageLevel` enum: DEBUG, INFO, SUCCESS, WARNING, ERROR
+- `add_message()`, `get_messages()`, individual level helpers
+
+### Missing
+- Message storage backends:
+  - `CookieStorage` (messages in cookies)
+  - `SessionStorage` (messages in session)
+  - `FallbackStorage` (cookie with session fallback)
+- Message template tags (`{% if messages %}`, etc.)
+- Message level overrides per request
+
+---
+
+## ✅ Postgres Fields — 0%
+
+### Not Implemented
+| Field | Django Counterpart | Priority |
+|-------|-------------------|----------|
+| ArrayField | `django.contrib.postgres.fields.ArrayField` | 🟡 Medium |
+| HStoreField | `django.contrib.postgres.fields.HStoreField` | 🟢 Low |
+| RangeField | `django.contrib.postgres.fields.RangeField` | 🟢 Low |
+| IntegerRangeField | `django.contrib.postgres.fields.IntegerRangeField` | 🟢 Low |
+| DateRangeField | `django.contrib.postgres.fields.DateRangeField` | 🟢 Low |
+| DateTimeRangeField | `django.contrib.postgres.fields.DateTimeRangeField` | 🟢 Low |
+
+---
+
+## ❌ Sites — 0%
+
+### Not Implemented
+| Feature | Django Counterpart | Notes |
+|---------|-------------------|-------|
+| Site model | `django.contrib.sites.models.Site` | Domain + name |
+| `get_current()` | `django.contrib.sites.shortcuts.get_current_site` | Request-based site lookup |
+| `SITE_ID` setting | Setting to identify current site | |
+
+---
+
+## ❌ GIS — 0%
+
+### Not Implemented
+| Feature | Django Counterpart | Notes |
+|---------|-------------------|-------|
+| Geometry types | `Point`, `LineString`, `Polygon`, `MultiPoint`, `MultiLineString`, `MultiPolygon`, `GeometryCollection` | Full GIS crate needed |
+| Spatial fields | `GeometryField`, `PointField`, `LineStringField`, `PolygonField`, `MultiPolygonField` | |
+| Spatial lookups | `dwithin`, `intersects`, `crosses`, `contains`, `within`, `overlaps` | |
+| Spatial functions | `Distance`, `Length`, `Area`, `Union`, `Intersection` | |
+| SRS support | SRID, coordinate system transforms | |
+
+---
+
+## 📦 Tasks Crate — New (not in Django core contrib)
+
+Rjango has a new `rjango-tasks` crate that provides Django 6.0's task framework:
+
+| Feature | Status |
+|---------|--------|
+| Task struct with id/name/args/status/result | ✅ |
+| TaskStatus enum (Queued/Running/Completed/Failed/Cancelled) | ✅ |
+| TaskResult (success/failure with output & error) | ✅ |
+| TaskDef with name, function, description | ✅ |
+| TaskRegistry with register/get/contains/all | ✅ |
+| `global_registry()` singleton | ✅ |
+| `enqueue()` convenience function | ✅ |
+| `register_task!` macro | ✅ |
+| `TaskHandle` for status polling & cancellation | ✅ |
+| `TaskQueue` trait | ✅ |
+| `MemoryTaskQueue` backend | ✅ |
+| `Worker` with `process_one()`, `run()`, `stop()` | ✅ |
+| 23 tests | ✅ |
+
+---
+
+## 📊 Coverage Summary
+
+| Subapp | Django APIs | Rjango | % | Priority |
+|--------|------------|--------|---|----------|
+| Admin | 20 | 3 | **15%** | Critical |
+| Humanize | 5 | 5 | **100%** | Complete |
+| Sitemaps | 3 | 2 | **67%** | Medium |
+| Flatpages | 3 | 1 | **33%** | Low |
+| Syndication | 3 | 2 | **67%** | Low |
+| Messages | 5 | 3 | **60%** | Medium |
+| Sessions | 5 | 2 | **40%** | Medium |
+| Staticfiles | 3 | 2 | **67%** | Low |
+| Redirects | 3 | 1 | **33%** | Low |
+| ContentTypes | 3 | 2 | **67%** | High |
+| Postgres Fields | 4 | 0 | **0%** | Low |
+| GIS | 3 | 0 | **0%** | Low |
+| **Total Contrib** | **60** | **19** | **32%** | |

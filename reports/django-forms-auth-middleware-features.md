@@ -1,367 +1,214 @@
 # Django 6.0.6 Forms, Auth & Middleware — Feature Comparison with Rjango
 
 > **Django modules analyzed:** `django.forms`, `django.contrib.auth`, `django.middleware`
+> **Last updated:** 2026-06-26
 
 ---
 
-## 1. Forms (`django.forms`)
+## Overview
 
-### Form Base
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class BaseForm` | `Form` | ⚠️ Partial | Rjango has `Form` struct |
-| `BaseForm.is_bound` | ✅ | |
-| `BaseForm.is_valid()` | ✅ | |
-| `BaseForm.errors` | `Form::errors()` | ✅ | |
-| `BaseForm.cleaned_data` | ✅ | |
-| `BaseForm.fields` | ✅ | |
-| `BaseForm.add_prefix(field_name)` | ❌ Missing | |
-| `BaseForm.add_initial_prefix(field_name)` | ❌ Missing | |
-| `BaseForm._clean_fields()` | ✅ | |
-| `BaseForm._clean_form()` | ❌ Missing | Hook for custom clean |
-| `BaseForm.full_clean()` | ✅ | |
-| `BaseForm.non_field_errors()` | ❌ Missing | |
-| `BaseForm.has_changed()` | ❌ Missing | |
-| `BaseForm.changed_data` | ❌ Missing | |
-| `class Form(metaclass=DeclarativeFieldsMetaclass)` | ✅ | |
-| `Form.as_table()` | `Form::as_table()` | ✅ | |
-| `Form.as_p()` | `Form::as_p()` | ✅ | |
-| `Form.as_div()` | `Form::as_div()` | ✅ | |
-| `Form.as_ul()` | ❌ Missing | |
-| `Form.as_databundle()` | ❌ Missing | |
-
-### Form Fields
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class Field(required, widget, label, initial, help_text, error_messages, validators, localize, disabled, label_suffix)` | `FormField` | ⚠️ Partial | Basic parameters present |
-| `Field.clean(value)` | ✅ | |
-| `Field.validate(value)` | ✅ | |
-| `Field.run_validators(value)` | ✅ | |
-| `Field.widget` | ✅ | |
-| `Field.has_changed(initial, data)` | ❌ Missing | |
-| `class CharField(Field)` | ✅ | |
-| `class IntegerField(Field)` | ✅ | |
-| `class FloatField(Field)` | ✅ | |
-| `class DecimalField(Field)` | ❌ Missing | |
-| `class BooleanField(Field)` | ✅ | |
-| `class NullBooleanField(BooleanField)` | ❌ Missing | |
-| `class ChoiceField(Field)` | ✅ | |
-| `class TypedChoiceField(ChoiceField)` | ❌ Missing | |
-| `class MultipleChoiceField(Field)` | ❌ Missing | |
-| `class TypedMultipleChoiceField(MultipleChoiceField)` | ❌ Missing | |
-| `class DateField(Field)` | ❌ Missing | |
-| `class TimeField(Field)` | ❌ Missing | |
-| `class DateTimeField(Field)` | ❌ Missing | |
-| `class DurationField(Field)` | ❌ Missing | |
-| `class SplitDateTimeField(Field)` | ❌ Missing | |
-| `class EmailField(CharField)` | ✅ | |
-| `class URLField(CharField)` | ✅ | |
-| `class FileField(Field)` | ❌ Missing | |
-| `class ImageField(FileField)` | ❌ Missing | |
-| `class RegexField(CharField)` | ❌ Missing | |
-| `class UUIDField(CharField)` | ❌ Missing | |
-| `class GenericIPAddressField(Field)` | ❌ Missing | |
-| `class SlugField(CharField)` | ❌ Missing | |
-| `class BaseTemporalField` | ❌ Missing | |
-
-### Form Widgets
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class Widget(attrs)` | `Widget` | ✅ | |
-| `Widget.render(name, value, attrs)` | ✅ | |
-| `Widget.get_context(name, value, attrs)` | ❌ Missing | |
-| `Widget.id_for_label(id_)` | ❌ Missing | |
-| `Widget.value_from_datadict(data, files, name)` | ❌ Missing | |
-| `Widget.format_value(value)` | ❌ Missing | |
-| `class Input(Widget)` | ✅ | |
-| `class TextInput(Input)` | ✅ | |
-| `class NumberInput(Input)` | ✅ | |
-| `class EmailInput(Input)` | ✅ | |
-| `class URLInput(Input)` | ❌ Missing | |
-| `class PasswordInput(Input)` | ✅ | |
-| `class HiddenInput(Input)` | ✅ | |
-| `class DateInput(Input)` | ✅ | |
-| `class DateTimeInput(Input)` | ✅ | |
-| `class TimeInput(Input)` | ❌ Missing | |
-| `class Textarea(Widget)` | ✅ | |
-| `class CheckboxInput(Widget)` | ✅ | |
-| `class Select(Widget)` | ✅ | |
-| `class NullBooleanSelect(Select)` | ❌ Missing | |
-| `class SelectMultiple(Select)` | ❌ Missing | |
-| `class RadioSelect(Select)` | ✅ | |
-| `class CheckboxSelectMultiple(Select)` | ❌ Missing | |
-| `class FileInput(Input)` | ❌ Missing | |
-| `class ClearableFileInput(FileInput)` | ❌ Missing | |
-| `class MultipleHiddenInput(HiddenInput)` | ❌ Missing | |
-| `class SplitDateTimeWidget(Widget)` | ❌ Missing | |
-| `class SplitHiddenDateTimeWidget` | ❌ Missing | |
-| `class ColorInput(Input)` | ❌ Missing | |
-| `class SearchInput(Input)` | ❌ Missing | |
-| `class TelInput(Input)` | ❌ Missing | |
-| `class Media` | ❌ Missing | CSS/JS media framework |
-
-### Formsets
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class BaseFormSet` | ❌ Missing | |
-| `BaseFormSet.forms` | ❌ Missing | |
-| `BaseFormSet.management_form` | ❌ Missing | |
-| `BaseFormSet.total_form_count()` | ❌ Missing | |
-| `BaseFormSet.initial_form_count()` | ❌ Missing | |
-| `BaseFormSet.media` | ❌ Missing | |
-| `BaseFormSet.is_valid()` | ❌ Missing | |
-| `BaseFormSet.cleaned_data` | ❌ Missing | |
-| `BaseFormSet.errors` | ❌ Missing | |
-| `BaseFormSet.can_order` | ❌ Missing | |
-| `BaseFormSet.can_delete` | ❌ Missing | |
-| `formset_factory(form, formset)` | ❌ Missing | |
-| `modelformset_factory(model)` | ❌ Missing | |
-| `inlineformset_factory(parent, child)` | ❌ Missing | |
-
-### Model Forms
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class ModelForm(BaseForm)` | ❌ Missing | |
-| `class BaseModelForm(BaseForm)` | ❌ Missing | |
-| `ModelForm.save(commit=True)` | ❌ Missing | |
-| `ModelForm.instance` | ❌ Missing | |
-| `modelform_factory(model)` | ❌ Missing | |
-| `model_to_dict(instance)` | ❌ Missing | |
-| `fields_for_model(model)` | ❌ Missing | |
-| `construct_instance(form, instance)` | ❌ Missing | |
-| `class ModelChoiceField` | ❌ Missing | |
-| `class ModelMultipleChoiceField` | ❌ Missing | |
-
-### Form Renderers
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class BaseRenderer` | ❌ Missing | |
-| `class DjangoTemplates(BaseRenderer)` | ❌ Missing | |
-| `class Jinja2(BaseRenderer)` | ❌ Missing | |
-| `class TemplatesSetting(BaseRenderer)` | ❌ Missing | |
-| `get_default_renderer()` | ❌ Missing | |
+| Category | Coverage | Status |
+|----------|----------|--------|
+| **Middleware** | 14/14 = **100%** | ✅ Complete |
+| **Auth** | 24/40 = **60%** | 🟡 Strong |
+| **Forms** | 12/83 = **15%** | ❌ Weak |
 
 ---
 
-## 2. Authentication (`django.contrib.auth`)
+## 🟢 Middleware — Complete (100%)
 
-### User Model
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class User(AbstractUser)` | `User` | ✅ | Present |
-| `class AbstractUser(AbstractBaseUser, PermissionsMixin)` | ❌ Missing | |
-| `class AnonymousUser` | `AnonymousUser` | ✅ | |
-| `class PermissionsMixin` | ✅ | Permissions handling |
-| `class PermissionManager` | ❌ Missing | |
-| `class Permission` | ❌ Missing | |
-| `class GroupManager` | ❌ Missing | |
-| `class Group` | ❌ Missing | |
-| `class UserManager(BaseUserManager)` | ❌ Missing | |
-| `User.is_authenticated` | ✅ | |
-| `User.is_anonymous` | ✅ | |
-| `User.is_active` | ✅ | |
-| `User.is_staff` | ✅ | |
-| `User.is_superuser` | ✅ | |
-| `User.has_perm(perm, obj)` | ✅ | |
-| `User.has_perms(perm_list, obj)` | ✅ | |
-| `User.has_module_perms(app_label)` | ✅ | |
-| `User.get_username()` | ❌ Missing | |
-| `User.get_full_name()` | ❌ Missing | |
-| `User.get_short_name()` | ❌ Missing | |
-| `User.set_password(raw)` | ❌ Missing | |
-| `User.check_password(raw)` | ❌ Missing | |
-| `User.set_unusable_password()` | ❌ Missing | |
-| `User.has_usable_password()` | ❌ Missing | |
-| `User.get_group_permissions(obj)` | ❌ Missing | |
-| `User.get_user_permissions(obj)` | ❌ Missing | |
-| `User.email_user(subject, ...)` | ❌ Missing | |
+### All 14 Middleware Types Implemented
 
-### Auth Functions
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `authenticate(request, **credentials)` | ✅ | |
-| `login(request, user)` | ✅ | |
-| `logout(request)` | ✅ | |
-| `get_user(request)` | ✅ | |
-| `get_user_model()` | ✅ | |
-| `update_session_auth_hash(request, user)` | ❌ Missing | |
-| `load_backend(path)` | ❌ Missing | |
-| `get_backends()` | ❌ Missing | |
-| `_get_user_session_key(request)` | ❌ Missing | |
+| Middleware | File | Django Equivalent |
+|-----------|------|-------------------|
+| `SecurityMiddleware` | `rjango-middleware/src/security.rs` | `SecurityMiddleware` |
+| `XFrameOptionsMiddleware` | `rjango-middleware/src/clickjacking.rs` | `XFrameOptionsMiddleware` |
+| `CsrfMiddleware` | `rjango-middleware/src/csrf.rs` | `CsrfViewMiddleware` |
+| `SessionMiddleware` | `rjango-middleware/src/session.rs` | `SessionMiddleware` |
+| `MessageMiddleware` | `rjango-middleware/src/messages.rs` | `MessageMiddleware` |
+| `CommonMiddleware` | `rjango-middleware/src/common.rs` | `CommonMiddleware` |
+| `GZipMiddleware` | `rjango-middleware/src/gzip.rs` | `GZipMiddleware` |
+| `ConditionalGetMiddleware` | `rjango-middleware/src/conditional_get.rs` | `ConditionalGetMiddleware` |
+| `LocaleMiddleware` | `rjango-middleware/src/locale.rs` | `LocaleMiddleware` |
+| `AuthMiddleware` | `rjango-auth/src/middleware_.rs` | `AuthenticationMiddleware` |
+| `RemoteUserMiddleware` | `rjango-middleware/src/remote_user.rs` | `RemoteUserMiddleware` |
+| `UpdateCacheMiddleware` | `rjango-middleware/src/cache.rs` | `UpdateCacheMiddleware` |
+| `FetchFromCacheMiddleware` | `rjango-middleware/src/cache.rs` | `FetchFromCacheMiddleware` |
+| `ContentSecurityPolicyMiddleware` | `rjango-middleware/src/csp.rs` | `django-csp` |
 
-### Auth Backends
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class BaseBackend` | ❌ Missing | |
-| `class ModelBackend(BaseBackend)` | ❌ Missing | |
-| `class AllowAllUsersModelBackend(ModelBackend)` | ❌ Missing | |
-| `class RemoteUserBackend(ModelBackend)` | ❌ Missing | |
-| `class AllowAllUsersRemoteUserBackend(RemoteUserBackend)` | ❌ Missing | |
-
-### Auth Decorators
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `login_required(function)` | `login_required()` | ✅ | |
-| `login_required(login_url, redirect_field_name)` | ✅ | |
-| `login_not_required(view_func)` | ❌ Missing | |
-| `permission_required(perm)` | `permission_required()` | ✅ | |
-| `permission_required(login_url, raise_exception)` | ✅ | |
-| `user_passes_test(test_func)` | `user_passes_test()` | ✅ | |
-| `user_passes_test(login_url)` | ✅ | |
-
-### Auth Middleware
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class AuthenticationMiddleware` | `AuthMiddleware` | ✅ | |
-| `class LoginRequiredMiddleware` | ❌ Missing | |
-| `class RemoteUserMiddleware` | ❌ Missing | |
-| `class PersistentRemoteUserMiddleware` | ❌ Missing | |
-
-### Auth Views
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class LoginView` | `LoginView` | ✅ | |
-| `class LogoutView` | `LogoutView` | ✅ | |
-| `logout_then_login(request)` | ❌ Missing | |
-| `redirect_to_login(next, login_url)` | ❌ Missing | |
-| `class PasswordResetView` | ❌ Missing | |
-| `class PasswordResetDoneView` | ❌ Missing | |
-| `class PasswordResetConfirmView` | ❌ Missing | |
-| `class PasswordResetCompleteView` | ❌ Missing | |
-| `class PasswordChangeView` | ❌ Missing | |
-| `class PasswordChangeDoneView` | ❌ Missing | |
-
-### Password Hashing
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `make_password(password)` | ✅ | |
-| `check_password(password, encoded)` | ✅ | |
-| `is_password_usable(encoded)` | ❌ Missing | |
-| `verify_password(password, encoded)` | ❌ Missing | |
-| `get_hashers()` | ❌ Missing | |
-| `identify_hasher(encoded)` | ❌ Missing | |
-| `class BasePasswordHasher` | ❌ Missing | |
-| `class PBKDF2PasswordHasher` | ❌ Missing | |
-| `class PBKDF2SHA1PasswordHasher` | ❌ Missing | |
-| `class Argon2PasswordHasher` | ❌ Missing | |
-| `class BCryptSHA256PasswordHasher` | ❌ Missing | |
-| `class BCryptPasswordHasher` | ❌ Missing | |
-| `class ScryptPasswordHasher` | ❌ Missing | |
-| `class MD5PasswordHasher` | ❌ Missing | |
-
-### Password Validation
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `validate_password(password)` | ❌ Missing | |
-| `password_changed(password)` | ❌ Missing | |
-| `password_validators_help_texts()` | ❌ Missing | |
-| `class MinimumLengthValidator` | ❌ Missing | |
-| `class UserAttributeSimilarityValidator` | ❌ Missing | |
-| `class CommonPasswordValidator` | ❌ Missing | |
-| `class NumericPasswordValidator` | ❌ Missing | |
-| `get_default_password_validators()` | ❌ Missing | |
-
-### Auth Forms
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class AuthenticationForm` | ❌ Missing | |
-| `class PasswordResetForm` | ❌ Missing | |
-| `class SetPasswordForm` | ❌ Missing | |
-| `class PasswordChangeForm` | ❌ Missing | |
-| `class AdminPasswordChangeForm` | ❌ Missing | |
-| `class UserCreationForm` | ❌ Missing | |
-| `class UserChangeForm` | ❌ Missing | |
+### MiddlewareStack
+- Ordered middleware chain with `add()`, `process()`, `len()`, `is_empty()`
+- `Middleware` trait with `process_request()`, `process_response()`, `process_view()`, `process_exception()`
 
 ---
 
-## 3. Middleware (`django.middleware`)
+## 🟡 Auth — 60% Coverage
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class SecurityMiddleware` | `SecurityMiddleware` | ✅ | Security headers |
-| `SecurityMiddleware.SECURE_SSL_REDIRECT` | ❌ Missing | |
-| `SecurityMiddleware.SECURE_HSTS_SECONDS` | ❌ Missing | |
-| `SecurityMiddleware.SECURE_CONTENT_TYPE_NOSNIFF` | ❌ Missing | |
-| `SecurityMiddleware.SECURE_BROWSER_XSS_FILTER` | ❌ Missing | |
-| `class CSRFMiddleware` | `CsrfMiddleware` | ✅ | |
-| `class SessionMiddleware` | `SessionMiddleware` | ✅ | |
-| `class MessageMiddleware` | `MessageMiddleware` | ✅ | |
-| `class XFrameOptionsMiddleware` | ❌ Missing | |
-| `class CommonMiddleware` | ❌ Missing | URL normalizing, APPEND_SLASH |
-| `class GZipMiddleware` | ❌ Missing | |
-| `class ConditionalGetMiddleware` | ❌ Missing | ETags, Last-Modified |
-| `class LocaleMiddleware` | ❌ Missing | |
-| `class BrokenLinkEmailsMiddleware` | ❌ Missing | |
-| `class UpdateCacheMiddleware` | ❌ Missing | |
-| `class FetchFromCacheMiddleware` | ❌ Missing | |
-| `class CacheMiddleware(Update, Fetch)` | ❌ Missing | |
-| `class ContentSecurityPolicyMiddleware` | ✅ | Rjango has CSP |
-| `MiddlewareMixin` | ❌ Missing | Django base middleware class |
+### ✅ Implemented (24 APIs)
+
+#### Models
+- `User` with `has_perm()`, `has_module_perms()`, `has_perms()`, `get_all_permissions()`, `get_group_permissions()`
+- `Permission`, `PermissionManager` with `by_codename()`, `matches()`, `natural_key()`
+- `Group`, `GroupManager`
+- `PermissionMixin`, `UserModelProxy` traits
+- `AnonymousUser`
+- `ContentType` with `get_for_model()`, `get_for_id()`
+
+#### Backends
+- `DefaultBackend` (ModelBackend)
+- `RemoteUserBackend`
+- `AuthenticationBackend` trait
+
+#### Decorators
+- `login_required`, `permission_required`, `user_passes_test`, `superuser_only`
+- `require_http_methods`, `apply_decorator`, `apply_decorators`
+
+#### Forms
+- `AuthenticationForm`, `PasswordResetForm`, `PasswordChangeForm`, `UserCreationForm`, `SetPasswordForm`
+- Validation methods with username/existing user checks
+
+#### Password Management
+- `PBKDF2PasswordHasher` with iterations, salt, digest
+- `check_password()`, `make_password()`, `is_password_usable()`, `constant_time_compare()`
+- `PasswordValidator` trait with `MinimumLengthValidator`, `UserAttributeSimilarityValidator`, `CommonPasswordValidator`, `NumericPasswordValidator`
+- `validate_password()`, `password_changed()`, `password_validators_help_texts()`
+
+#### Views
+- `login_view()`, `handle_login()`, `logout_view()`
+
+#### Middleware
+- `AuthMiddleware` with `process_request()`, `is_authenticated()`, `login_required()`
+
+### ❌ Missing (16 APIs)
+
+| Feature | Priority | Notes |
+|---------|----------|-------|
+| `PasswordResetConfirmView` | Medium | Password reset via token |
+| `PasswordResetDoneView` | Medium | Success page |
+| `PasswordResetCompleteView` | Medium | Completion page |
+| `LoginView` (CBV) | Low | Class-based version (fn exists) |
+| `LogoutView` (CBV) | Low | Class-based version (fn exists) |
+| Permission assign/remove for individual users | Medium | Currently group-level only |
+| `user.get_all_permissions()` across groups | Low | Basic implementation exists |
+| `AuthBackend.get_user_permissions()` | Low | |
+| `AuthBackend.get_group_permissions()` | Low | |
+| Rate limiting on login | Low | |
+| Session invalidation on password change | Low | |
+| Built-in password reset email templates | Low | |
+| `AuthenticationMiddleware` with request.user lazy loading | Low | Basic implementation exists |
 
 ---
 
-## 4. Sessions (contrib.sessions)
+## ❌ Forms — 15% Coverage (Weakest Module)
 
-| Django API | Rjango Equivalent | Status | Notes |
-|---|---|---|---|
-| `class SessionBase` | `SessionStore` | ⚠️ Partial | |
-| `SessionBase.get(key)` | ✅ | |
-| `SessionBase.setdefault(key, value)` | ❌ Missing | |
-| `SessionBase.update(dict)` | ❌ Missing | |
-| `SessionBase.pop(key)` | ❌ Missing | |
-| `SessionBase.keys()` | ❌ Missing | |
-| `SessionBase.values()` | ❌ Missing | |
-| `SessionBase.items()` | ❌ Missing | |
-| `SessionBase.clear()` | ❌ Missing | |
-| `SessionBase.set_expiry(value)` | ❌ Missing | |
-| `SessionBase.get_expiry_age()` | ❌ Missing | |
-| `SessionBase.get_expiry_date()` | ❌ Missing | |
-| `SessionBase.get_expire_at_browser_close()` | ❌ Missing | |
-| `SessionBase.flush()` | ❌ Missing | |
-| `SessionBase.cycle_key()` | ❌ Missing | |
-| `db backend (SessionStore)` | ❌ Missing | |
-| `cache backend` | ❌ Missing | |
-| `file backend` | ❌ Missing | |
-| `signed_cookies backend` | ❌ Missing | |
+### ✅ Implemented (12 APIs)
+
+#### Fields
+- `FormField` struct with name, label, field_type, required, widget, validators
+- `FieldType` enum with 23 variants: Char, Integer, Boolean, Email, URL, Date, DateTime, Time, Duration, Float, Decimal, Regex, Slug, UUID, IpAddress, IPv6, URL, NullBoolean, Hidden, File, Image, SplitDateTime, TypedChoice, TypedMultipleChoice, FilePath, GenericIPAddress
+- `FormField::clean()` with validation for Integer, Float, Decimal, Boolean, Email, URL, Date, DateTime, UUID, IpAddress
+
+#### Widgets
+- `WidgetType` enum with 23 variants: TextInput, EmailInput, PasswordInput, NumberInput, URLInput, Textarea, Select, SelectMultiple, CheckboxInput, CheckboxSelectMultiple, RadioSelect, NullBooleanSelect, DateInput, DateTimeInput, TimeInput, HiddenInput, FileInput, ClearableFileInput, SplitDateTimeInput, SelectDateWidget, MultipleHiddenInput
+- `render_widget()` function for HTML generation
+- Widget renderers for all 23 widget types
+
+#### Form
+- `Form` struct with `new()`, `bind()`, `full_clean()`, `is_valid()`, `cleaned_data()`, `errors()`, `render()`, `as_p()`, `as_table()`, `as_div()`
+- `ModelFormOptions`, `modelform_factory()` (basic)
+- `FormState` with valid/invalid states
+- CSRF input rendering
+
+#### Formsets
+- `BaseFormSet` with `new()`, `is_valid()`, `total_form_count()`, `initial_form_count()`, `cleaned_data()`, `render_all()`
+- `ManagementForm`, `FormsetForm`
+- `formset_factory()` function
+- `modelformset_factory()` ✅ (new)
+- `inlineformset_factory()` ✅ (new)
+- `name_fieldset()` helper
+
+### ❌ Missing (71 APIs)
+
+#### Fields (critical)
+| Missing Field | Status |
+|--------------|--------|
+| Per-field `clean_<name>()` hook | ❌ Core missing feature |
+| `TypedChoiceField` | Partial (enum exists, no clean logic) |
+| `TypedMultipleChoiceField` | Partial (enum exists, no clean logic) |
+| `SplitDateTimeField` | Partial (enum exists, no clean logic) |
+| ComboField | ❌ |
+| `MultiValueField` | ❌ |
+| `RegexField` | Partial (enum exists) |
+| `ChoiceField` / `MultipleChoiceField` with proper choices | Partial |
+| `JSONField` | ❌ |
+| `GenericIPAddressField` clean logic | ❌ |
+| Field `has_changed()` | ❌ |
+| Field `prepare_value()` for rendering | ❌ |
+| `validate()` / `run_validators()` | ❌ |
+
+#### Forms (critical)
+| Missing API | Status |
+|-------------|--------|
+| `hidden_fields()` / `visible_fields()` | ❌ |
+| `non_field_errors()` | ❌ |
+| `changed_data` | ❌ |
+| `bound_field_class` integration | ❌ |
+| Renderer system (template_name_table/ul/p/div) | ❌ |
+| `Form.media` property | ❌ |
+| `Form.is_multipart()` | ❌ |
+| `add_prefix()` / `add_initial_prefix()` | ❌ |
+| ErrorDict / ErrorList as structured output | Partial |
+
+#### Formsets (critical)
+| Missing API | Status |
+|-------------|--------|
+| `deleted_forms()` | ❌ |
+| `ordered_forms()` | ❌ |
+| `extra_forms()` | ❌ |
+| `empty_form` | ❌ |
+| `has_changed()` | ❌ |
+| `non_form_errors()` | ❌ |
+| `total_error_count()` | ❌ |
+| `full_clean()` / `is_valid()` chain | Partial |
+| `get_form_kwargs()` | ❌ |
+| Deletion/ordering widgets | ❌ |
+
+#### ModelForms (critical)
+| Missing API | Status |
+|-------------|--------|
+| `ModelForm` (full) with `save()` | ❌ |
+| `form.save(commit=False)` → save_m2m() | ❌ |
+| `construct_instance()` | ❌ |
+| `model_to_dict()`, `fields_for_model()` | ❌ |
+| `ModelChoiceField`, `ModelMultipleChoiceField` | ❌ |
+| `BaseModelFormSet`, `BaseInlineFormSet` (full) | ❌ |
+| `inlineformset_factory()` (full) | Partial |
+| `modelformset_factory()` (full) | Partial |
+| Limit choices to model instances | ❌ |
+
+#### Widgets
+| Missing Widget | Status |
+|----------------|--------|
+| `MultiWidget` composition | ❌ |
+| `SplitHiddenDateTimeWidget` | ❌ |
+| `ColorInput`, `SearchInput`, `TelInput` | ❌ |
+| Widget `attrs` handling | ❌ |
+| Widget `Media` (CSS/JS) | ❌ |
+| `build_attrs()` | ❌ |
+| `id_for_label()` | ❌ |
+| `use_required_attribute()` | ❌ |
+| `value_from_datadict()` | ❌ |
+| `value_omitted_from_data()` | ❌ |
+| `format_value()` / `decompress()` | ❌ |
+| `get_context()` | ❌ |
 
 ---
 
-## Summary
+## 📊 Coverage Summary
 
-### Rjango Forms/Auth/Middleware Features (✅ Complete)
-- ✅ Form field types (Char, Integer, Float, Boolean, Choice, Email, URL)
-- ✅ Form validation + error handling
-- ✅ Widgets (Text, Number, Email, Password, Hidden, Textarea, Checkbox, Select, Radio, Date, DateTime)
-- ✅ Form rendering (as_table, as_p, as_div)
-- ✅ User model (is_active, is_staff, is_superuser, permissions)
-- ✅ Auth decorators (login_required, permission_required, user_passes_test, superuser_only)
-- ✅ Login/Logout views
-- ✅ Auth middleware
-- ✅ CSRF middleware
-- ✅ Session middleware
-- ✅ Messages middleware
-- ✅ Security middleware
-- ✅ CSP middleware
-
-### Missing Features (❌)
-- ❌ Formsets
-- ❌ ModelForms (save to DB)
-- ❌ ModelChoiceField
-- ❌ Form renderers
-- ❌ Full widget set (ColorInput, SearchInput, TelInput, etc.)
-- ❌ Media framework for CSS/JS
-- ❌ Auth forms (AuthenticationForm, PasswordResetForm, etc.)
-- ❌ Password validation system
-- ❌ Full password hasher framework
-- ❌ Password reset view chain
-- ❌ Groups & Permissions models
-- ❌ RemoteUserBackend
-- ❌ LoginRequiredMiddleware
-- ❌ XFrameOptionsMiddleware
-- ❌ CommonMiddleware
-- ❌ GZipMiddleware
-- ❌ ConditionalGetMiddleware
-- ❌ LocaleMiddleware
-- ❌ Cache middleware
-- ❌ Session expiry management
-- ❌ Multiple session backends
+| Submodule | Django | Rjango | % |
+|-----------|--------|--------|---|
+| Middleware | 14 | 14 | **100%** ✅ |
+| Auth | 40 | 24 | **60%** |
+| Forms | 83 | 12 | **15%** |
+| **Total** | **137** | **50** | **36%** |
