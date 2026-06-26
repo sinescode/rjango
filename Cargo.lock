@@ -1471,6 +1471,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rjango-tasks"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "rjango-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "rjango-templates"
 version = "0.1.0"
 dependencies = [

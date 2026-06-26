@@ -159,6 +159,67 @@ pub fn formset_factory(
     move || BaseFormSet::new(form_builder, extra, can_delete, can_order, min_num, max_num)
 }
 
+/// Create a ModelForm formset — like Django's `modelformset_factory`.
+///
+/// Takes a vector of model field definitions `(name, type_name)` and
+/// returns a `BaseFormSet` with the given number of extra forms.
+pub fn modelformset_factory(
+    model_fields: Vec<(&str, &str)>,
+    extra: usize,
+    can_delete: bool,
+    can_order: bool,
+    min_num: usize,
+    max_num: usize,
+) -> BaseFormSet {
+    let fields: Vec<FormField> = model_fields
+        .iter()
+        .map(|(name, type_str)| {
+            FormField::new(name, field_type_from_model_type(type_str))
+        })
+        .collect();
+    let factory = move |_index: usize| fields.clone();
+    BaseFormSet::new(factory, extra, can_delete, can_order, min_num, max_num)
+}
+
+/// Create an Inline formset — like Django's `inlineformset_factory`.
+///
+/// Similar to `modelformset_factory` but adds a hidden foreign key field
+/// to each form.
+pub fn inlineformset_factory(
+    model_fields: Vec<(&str, &str)>,
+    fk_name: String,
+    extra: usize,
+    can_delete: bool,
+) -> BaseFormSet {
+    let mut all_fields: Vec<FormField> = model_fields
+        .iter()
+        .map(|(name, type_str)| {
+            FormField::new(name, field_type_from_model_type(type_str))
+        })
+        .collect();
+    all_fields.push(FormField::new(&fk_name, FieldType::Hidden));
+    if can_delete {
+        all_fields.push(FormField::new("DELETE", FieldType::Boolean).required(false));
+    }
+    let factory = move |_index: usize| all_fields.clone();
+    BaseFormSet::new(factory, extra, can_delete, false, 0, 0)
+}
+
+fn field_type_from_model_type(s: &str) -> FieldType {
+    match s {
+        "CharField" | "TextField" | "SlugField" | "URLField" | "EmailField" | "UUIDField" | "FilePathField" => FieldType::Char,
+        "IntegerField" | "AutoField" | "BigAutoField" | "SmallAutoField" | "BigIntegerField" | "PositiveBigIntegerField" => FieldType::Integer,
+        "BooleanField" => FieldType::Boolean,
+        "DateField" => FieldType::Date,
+        "DateTimeField" => FieldType::DateTime,
+        "TimeField" => FieldType::Time,
+        "DurationField" => FieldType::Duration,
+        "FloatField" | "DecimalField" => FieldType::Float,
+        "GenericIPAddressField" | "IPAddressField" => FieldType::GenericIPAddress,
+        _ => FieldType::Char,
+    }
+}
+
 /// Helper: create a simple name field.
 pub fn name_fieldset(_index: usize) -> Vec<FormField> {
     vec![
@@ -272,5 +333,47 @@ mod tests {
         let _cloned = fs.clone();
         // Empty required fields => not valid
         assert!(!fs.is_valid());
+    }
+
+    #[test]
+    fn test_modelformset_factory_basic() {
+        let fs = modelformset_factory(
+            vec![("name", "CharField"), ("age", "IntegerField")],
+            2,
+            false,
+            false,
+            0,
+            0,
+        );
+        assert_eq!(fs.total_form_count(), 2);
+    }
+
+    #[test]
+    fn test_inlineformset_factory_basic() {
+        let fs = inlineformset_factory(
+            vec![("title", "CharField")],
+            "parent_id".into(),
+            1,
+            true,
+        );
+        assert_eq!(fs.total_form_count(), 1);
+        // Should include hidden FK + DELETE field
+        let field_names: Vec<&str> = fs.forms[0].form.fields.iter().map(|f| f.name.as_str()).collect();
+        assert!(field_names.contains(&"parent_id"));
+        assert!(field_names.contains(&"DELETE"));
+    }
+
+    #[test]
+    fn test_inlineformset_factory_no_delete() {
+        let fs = inlineformset_factory(
+            vec![("title", "CharField")],
+            "blog_id".into(),
+            2,
+            false,
+        );
+        assert_eq!(fs.total_form_count(), 2);
+        let field_names: Vec<&str> = fs.forms[0].form.fields.iter().map(|f| f.name.as_str()).collect();
+        assert!(field_names.contains(&"blog_id"));
+        assert!(!field_names.contains(&"DELETE"));
     }
 }

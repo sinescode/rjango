@@ -59,6 +59,8 @@ impl FormField {
             FieldType::SplitDateTime => super::widgets::WidgetType::SplitDateTimeInput,
             FieldType::TypedChoice(_) => super::widgets::WidgetType::Select(vec![]),
             FieldType::TypedMultipleChoice(_) => super::widgets::WidgetType::SelectMultiple(vec![]),
+            FieldType::FilePath => super::widgets::WidgetType::TextInput,
+            FieldType::GenericIPAddress => super::widgets::WidgetType::TextInput,
         };
         Self {
             name: name.to_string(),
@@ -237,6 +239,8 @@ pub enum FieldType {
     SplitDateTime,
     TypedChoice(Vec<(String, String)>),
     TypedMultipleChoice(Vec<(String, String)>),
+    FilePath,
+    GenericIPAddress,
 }
 
 #[cfg(test)]
@@ -419,5 +423,19 @@ mod tests {
     fn test_decimal_field_widget() {
         let field = FormField::new("price", FieldType::Decimal);
         assert!(matches!(field.widget, crate::widgets::WidgetType::NumberInput));
+    }
+
+    #[test]
+    fn test_file_path_field() {
+        let field = FormField::new("path", FieldType::FilePath);
+        assert!(matches!(field.widget, crate::widgets::WidgetType::TextInput));
+        assert_eq!(field.clean(&Value::String("/tmp/file.txt".into())).unwrap(), "/tmp/file.txt");
+    }
+
+    #[test]
+    fn test_generic_ip_address_field() {
+        let field = FormField::new("ip", FieldType::GenericIPAddress);
+        assert!(matches!(field.widget, crate::widgets::WidgetType::TextInput));
+        assert_eq!(field.clean(&Value::String("192.168.1.1".into())).unwrap(), "192.168.1.1");
     }
 }

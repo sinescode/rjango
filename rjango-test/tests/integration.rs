@@ -29,6 +29,7 @@ fn build_test_app() -> rjango_server::Application {
     // Build middleware stack
     let mut mw = MiddlewareStack::new();
     mw.add(rjango_middleware::security::SecurityMiddleware);
+    mw.add(rjango_middleware::clickjacking::XFrameOptionsMiddleware);
     mw.add(rjango_middleware::csrf::CsrfMiddleware);
 
     // Build application

@@ -36,15 +36,17 @@ pub trait Middleware: Send + Sync {
     }
 }
 
-pub mod csrf;
-pub mod security;
-pub mod session;
-pub mod messages;
+pub mod cache;
 pub mod clickjacking;
 pub mod common;
-pub mod gzip;
 pub mod conditional_get;
+pub mod csrf;
+pub mod gzip;
 pub mod locale;
+pub mod messages;
+pub mod remote_user;
+pub mod security;
+pub mod session;
 
 /// Middleware stack — applies all middleware in order.
 pub struct MiddlewareStack {

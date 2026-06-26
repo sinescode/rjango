@@ -1,9 +1,62 @@
 
 use std::path::PathBuf;
+use std::sync::Mutex;
+use std::collections::HashMap;
 
 /// Trait for template loaders.
 pub trait TemplateLoader: Send + Sync {
     fn load(&self, name: &str) -> Option<String>;
+}
+
+/// CachedLoader — wraps another loader and caches loaded templates.
+///
+/// Mirrors Django's `django.template.loaders.cached.Loader`.
+pub struct CachedLoader {
+    inner: Box<dyn TemplateLoader>,
+    cache: Mutex<HashMap<String, String>>,
+}
+
+impl CachedLoader {
+    pub fn new(inner: Box<dyn TemplateLoader>) -> Self {
+        Self {
+            inner,
+            cache: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Clear the cache for all templates.
+    pub fn clear(&self) {
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.clear();
+        }
+    }
+
+    /// Remove a specific template from the cache.
+    pub fn invalidate(&self, name: &str) {
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.remove(name);
+        }
+    }
+}
+
+impl TemplateLoader for CachedLoader {
+    fn load(&self, name: &str) -> Option<String> {
+        // Check cache first
+        if let Ok(cache) = self.cache.lock() {
+            if let Some(cached) = cache.get(name) {
+                return Some(cached.clone());
+            }
+        }
+        // Load from inner
+        if let Some(content) = self.inner.load(name) {
+            if let Ok(mut cache) = self.cache.lock() {
+                cache.insert(name.to_string(), content.clone());
+            }
+            Some(content)
+        } else {
+            None
+        }
+    }
 }
 
 /// Load templates from the filesystem.
@@ -123,5 +176,84 @@ mod tests {
         let loader = TestLoader;
         assert_eq!(loader.load("../template.html"), Some("Test template: {{ content }}".to_string()));
         assert_eq!(loader.load("/etc/passwd"), Some("Test template: {{ content }}".to_string()));
+    }
+
+    // ── CachedLoader tests ────────────────────────────────────────────
+
+    #[test]
+    fn test_cached_loader_caches() {
+        let inner = TestLoader;
+        let loader = CachedLoader::new(Box::new(inner));
+        let first = loader.load("test.html");
+        assert!(first.is_some());
+        let second = loader.load("test.html");
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn test_cached_loader_invalidate() {
+        let inner = TestLoader;
+        let loader = CachedLoader::new(Box::new(inner));
+        loader.load("page.html");
+        loader.invalidate("page.html");
+        let reloaded = loader.load("page.html");
+        assert!(reloaded.is_some());
+    }
+
+    #[test]
+    fn test_cached_loader_clear() {
+        let inner = TestLoader;
+        let loader = CachedLoader::new(Box::new(inner));
+        loader.load("a.html");
+        loader.load("b.html");
+        loader.clear();
+        assert!(loader.load("a.html").is_some());
+        assert!(loader.load("b.html").is_some());
+    }
+
+    #[test]
+    fn test_cached_loader_returns_none_for_missing() {
+        let inner = FileSystemLoader::new(vec![]);
+        let loader = CachedLoader::new(Box::new(inner));
+        assert!(loader.load("nonexistent.html").is_none());
+    }
+
+    #[test]
+    fn test_cached_loader_is_send_sync() {
+        fn _assert<T: Send + Sync>() {}
+        _assert::<CachedLoader>();
+    }
+
+    #[test]
+    fn test_cached_loader_concurrent_access() {
+        use std::thread;
+        let inner = TestLoader;
+        let loader = std::sync::Arc::new(CachedLoader::new(Box::new(inner)));
+        let mut handles = vec![];
+        for i in 0..10 {
+            let loader = loader.clone();
+            handles.push(thread::spawn(move || {
+                let name = format!("template_{}.html", i);
+                loader.load(&name)
+            }));
+        }
+        for h in handles {
+            assert!(h.join().unwrap().is_some());
+        }
+    }
+
+    #[test]
+    fn test_cached_loader_wraps_filesystem_loader() {
+        let inner = FileSystemLoader::new(vec![std::path::PathBuf::from("/tmp")]);
+        let loader = CachedLoader::new(Box::new(inner));
+        assert!(loader.load("nonexistent.html").is_none());
+    }
+
+    #[test]
+    fn test_cached_loader_returns_same_content() {
+        let inner = TestLoader;
+        let loader = CachedLoader::new(Box::new(inner));
+        let result = loader.load("anything");
+        assert_eq!(result, Some("Test template: {{ content }}".to_string()));
     }
 }

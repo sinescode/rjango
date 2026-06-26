@@ -23,6 +23,7 @@ pub enum WidgetType {
     ClearableFileInput,
     SplitDateTimeInput,
     SelectDateWidget,
+    MultipleHiddenInput,
 }
 
 impl WidgetType {
@@ -169,6 +170,14 @@ pub fn render_widget(widget: &WidgetType, name: &str, value: &str, _help_text: &
                  <select name=\"{}\"><option value=\"\">Day</option></select>\n\
                  </div>",
                 name, name, name
+            )
+        }
+        WidgetType::MultipleHiddenInput => {
+            format!(
+                "<input type=\"hidden\" name=\"{}\" value=\"{}\">\n\
+                 <input type=\"hidden\" name=\"{}_0\" value=\"\">\n\
+                 <input type=\"hidden\" name=\"{}_1\" value=\"\">",
+                name, escaped, name, name
             )
         }
     }
@@ -343,5 +352,13 @@ mod tests {
             let html = render_widget(w, "test", "val", "help");
             assert!(!html.is_empty(), "Widget {:?} returned empty", w);
         }
+    }
+
+    #[test]
+    fn test_multiple_hidden_input() {
+        let html = render_widget(&WidgetType::MultipleHiddenInput, "tags", "a,b,c", "");
+        assert!(html.contains("type=\"hidden\""));
+        assert!(html.contains("name=\"tags\""));
+        assert!(html.contains("value=\"a,b,c\""));
     }
 }

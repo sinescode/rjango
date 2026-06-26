@@ -52,6 +52,7 @@ pub fn builtin_filters() -> Vec<(&'static str, FilterFn)> {
         ("phone2numeric", |v, _| phone2numeric(v)),
         ("unordered_list", |v, _| unordered_list(v)),
         ("dictsort", |v, args| dictsort(v, args)),
+        ("dictsortreversed", |v, args| dictsortreversed(v, args)),
         ("pprint", |v, _| pprint(v)),
         ("escapejs", |v, _| escapejs(v)),
         ("truncatechars_html", |v, args| truncatechars_html(v, args)),
@@ -536,6 +537,22 @@ fn dictsort(v: &Value, args: &[&str]) -> Value {
     }
 }
 
+fn dictsortreversed(v: &Value, args: &[&str]) -> Value {
+    let key = args.first().unwrap_or(&"");
+    match v {
+        Value::Array(items) => {
+            let mut sorted = items.clone();
+            sorted.sort_by(|a, b| {
+                let av = a.get(key).and_then(|v| v.as_str()).unwrap_or("");
+                let bv = b.get(key).and_then(|v| v.as_str()).unwrap_or("");
+                bv.cmp(av) // Reversed
+            });
+            Value::Array(sorted)
+        }
+        _ => v.clone(),
+    }
+}
+
 fn pprint(v: &Value) -> Value {
     Value::String(format!("{:#}", v))
 }
@@ -927,6 +944,29 @@ mod tests {
         } else {
             panic!("Expected array");
         }
+    }
+
+    #[test]
+    fn test_dictsortreversed() {
+        let data = json!([
+            {"name": "zoe", "age": 25},
+            {"name": "alice", "age": 30},
+            {"name": "bob", "age": 20}
+        ]);
+        let sorted = dictsortreversed(&data, &["name"]);
+        if let Value::Array(items) = sorted {
+            assert_eq!(items[0].get("name").and_then(|v| v.as_str()), Some("zoe"));
+            assert_eq!(items[1].get("name").and_then(|v| v.as_str()), Some("bob"));
+            assert_eq!(items[2].get("name").and_then(|v| v.as_str()), Some("alice"));
+        } else {
+            panic!("Expected array");
+        }
+    }
+
+    #[test]
+    fn test_dictsortreversed_non_array() {
+        let result = dictsortreversed(&json!("hello"), &["key"]);
+        assert_eq!(result, json!("hello"));
     }
 
     #[test]

@@ -188,37 +188,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_send_mail() {
+    fn test_email_combined() {
+        // All email tests merged into one to avoid SENT_MAIL static race condition.
+
+        // 1. Basic send
         clear_sent_emails();
         send_mail("Subject", "Body", "from@test.com", &["to@test.com"]);
         let sent = get_sent_emails();
         assert_eq!(sent.len(), 1);
         assert_eq!(sent[0].subject, "Subject");
         assert_eq!(sent[0].body, "Body");
-    }
 
-    #[test]
-    fn test_send_mail_multiple_recipients() {
+        // 2. Multiple recipients
         clear_sent_emails();
         let count = send_mail("Hello", "World", "a@b.com", &["a@b.com", "c@d.com", "e@f.com"]);
-        assert_eq!(count, 3); // returns recipient count
+        assert_eq!(count, 3);
         assert_eq!(get_sent_emails()[0].to.len(), 3);
-    }
 
-    #[test]
-    fn test_email_message_with_cc_bcc() {
+        // 3. CC and BCC
         clear_sent_emails();
         let mut msg = EmailMessage::new("Test", "Body", "from@b.com", vec!["to@b.com".into()]);
         msg.cc.push("cc@b.com".into());
         msg.bcc.push("bcc@b.com".into());
         send_email(&msg);
         let sent = get_sent_emails();
+        assert_eq!(sent.len(), 1);
         assert_eq!(sent[0].cc, vec!["cc@b.com"]);
         assert_eq!(sent[0].bcc, vec!["bcc@b.com"]);
-    }
 
-    #[test]
-    fn test_send_mass_mail() {
+        // 4. Mass mail
         clear_sent_emails();
         let msgs = vec![
             ("Sub1", "Body1", "a@b.com", &["r1@b.com"] as &[&str]),
@@ -226,24 +224,29 @@ mod tests {
         ];
         send_mass_mail(&msgs);
         assert_eq!(get_sent_emails().len(), 2);
-    }
 
-    #[test]
-    fn test_mail_admins() {
+        // 5. Mail admins
         clear_sent_emails();
         mail_admins("Alert", "Something happened");
         let sent = get_sent_emails();
         assert_eq!(sent[0].subject, "Alert");
         assert!(sent[0].to.contains(&"admin@example.com".to_string()));
-    }
 
-    #[test]
-    fn test_mail_managers() {
+        // 6. Mail managers
         clear_sent_emails();
         mail_managers("Manager alert", "Check");
         let sent = get_sent_emails();
         assert_eq!(sent[0].subject, "Manager alert");
         assert!(sent[0].to.contains(&"manager@example.com".to_string()));
+
+        // 7. Multi-alternatives (uses send() which touches SENT_MAIL)
+        clear_sent_emails();
+        let msg = EmailMultiAlternatives::new("MultiAlt", "Plain", "from@b.com", vec!["to@b.com".into()])
+            .attach_alternative("<b>Rich</b>", "text/html");
+        msg.send();
+        let sent = get_sent_emails();
+        assert_eq!(sent[0].subject, "MultiAlt");
+        assert_eq!(sent[0].alternatives.len(), 1);
     }
 
     #[test]
@@ -267,17 +270,6 @@ mod tests {
             .attach_alternative("<h1>HTML</h1>", "text/html");
         assert_eq!(msg.alternatives.len(), 1);
         assert_eq!(msg.alternatives[0].1, "text/html");
-    }
-
-    #[test]
-    fn test_email_multi_alternatives() {
-        clear_sent_emails();
-        let msg = EmailMultiAlternatives::new("MultiAlt", "Plain", "from@b.com", vec!["to@b.com".into()])
-            .attach_alternative("<b>Rich</b>", "text/html");
-        msg.send();
-        let sent = get_sent_emails();
-        assert_eq!(sent[0].subject, "MultiAlt");
-        assert_eq!(sent[0].alternatives.len(), 1);
     }
 
     #[test]
