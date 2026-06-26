@@ -9,3 +9,4 @@ pub mod humanize;
 pub mod redirects;
 pub mod messages;
 pub mod staticfiles;
+pub mod admin;

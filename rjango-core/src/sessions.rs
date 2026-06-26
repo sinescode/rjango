@@ -136,6 +136,60 @@ pub fn get_session_store() -> &'static SessionStore {
     session_store()
 }
 
+/// Trait for pluggable session backends — like Django's session backends.
+pub trait SessionBackend {
+    fn get(&self, key: &str) -> Option<serde_json::Value>;
+    fn set(&mut self, key: &str, value: serde_json::Value);
+    fn delete(&mut self, key: &str);
+    fn clear(&mut self);
+    fn keys(&self) -> Vec<String>;
+}
+
+/// In-memory session backend — like Django's cached_db backend but simpler.
+pub struct InMemorySessionBackend {
+    data: HashMap<String, serde_json::Value>,
+}
+
+impl InMemorySessionBackend {
+    pub fn new() -> Self {
+        Self {
+            data: HashMap::new(),
+        }
+    }
+
+    pub fn session_id(&self) -> &str {
+        "in-memory"
+    }
+}
+
+impl Default for InMemorySessionBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SessionBackend for InMemorySessionBackend {
+    fn get(&self, key: &str) -> Option<serde_json::Value> {
+        self.data.get(key).cloned()
+    }
+
+    fn set(&mut self, key: &str, value: serde_json::Value) {
+        self.data.insert(key.to_string(), value);
+    }
+
+    fn delete(&mut self, key: &str) {
+        self.data.remove(key);
+    }
+
+    fn clear(&mut self) {
+        self.data.clear();
+    }
+
+    fn keys(&self) -> Vec<String> {
+        self.data.keys().cloned().collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -22,6 +22,16 @@ impl ContentType {
     pub fn name(&self) -> String {
         format!("{}.{}", self.app_label, self.model)
     }
+
+    /// Return the model class name (short name).
+    pub fn model_class_name(&self) -> &str {
+        &self.model
+    }
+
+    /// Return the app label.
+    pub fn app_label(&self) -> &str {
+        &self.app_label
+    }
 }
 
 /// Global registry for content types (like Django's ContentTypeManager).
@@ -88,6 +98,11 @@ pub fn register_content_type(app_label: &str, model: &str) -> ContentType {
         *guard = Some(ContentTypeManager::new());
     }
     guard.as_mut().unwrap().register(app_label, model)
+}
+
+/// Convenience function — returns a lightweight ContentType without registering.
+pub fn get_content_type(app_label: &str, model: &str) -> ContentType {
+    ContentType::new(0, app_label, model)
 }
 
 /// Look up a content type globally.
