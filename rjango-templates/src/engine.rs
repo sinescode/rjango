@@ -689,6 +689,12 @@ impl Engine {
         self.loader.load(name).ok_or_else(|| format!("Template not found: {}", name))
     }
 
+    /// Get a parsed template by name.
+    pub fn get_template(&self, name: &str) -> Result<Template, String> {
+        let source = self.load_source(name)?;
+        Ok(parse_template(&source))
+    }
+
     /// Render a template by name with the given context.
     pub fn render(&self, name: &str, ctx: &Context) -> Result<String, String> {
         let source = self.load_source(name)?;
@@ -701,6 +707,27 @@ impl Engine {
         let resolved_nodes = resolve_inheritance(&template, self);
         Ok(render_nodes(&resolved_nodes, ctx, self, 0))
     }
+}
+
+/// Convenience: render template as string (like Django's `render_to_string`).
+/// Creates a temporary engine with the given loader.
+pub fn render_to_string(
+    template_name: &str,
+    ctx: &Context,
+    loader: Box<dyn TemplateLoader>,
+) -> Result<String, String> {
+    let engine = Engine::new(loader);
+    engine.render(template_name, ctx)
+}
+
+/// Convenience: render a source string directly.
+pub fn render_template_string(
+    source: &str,
+    ctx: &Context,
+) -> String {
+    let loader = Box::new(crate::loaders::TestLoader);
+    let engine = Engine::new(loader);
+    engine.render_string(source, ctx).unwrap_or_default()
 }
 
 #[cfg(test)]

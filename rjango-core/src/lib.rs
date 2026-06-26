@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 pub mod errors;
+pub mod exceptions;
 pub mod http;
 pub mod settings;
 pub mod apps;

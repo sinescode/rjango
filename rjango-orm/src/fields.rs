@@ -1,4 +1,5 @@
 use std::fmt;
+use std::collections::HashMap;
 use serde_json::Value;
 
 /// Trait for model fields.
@@ -12,6 +13,25 @@ pub trait Field: Send + Sync + fmt::Debug {
     fn validate(&self, value: &Value) -> Result<(), String>;
     fn to_db(&self, value: &Value) -> String;
     fn from_db(&self, value: &str) -> Value;
+
+    /// Extract the field's value from a row HashMap, returning None if absent.
+    fn value_from_object(&self, obj: &HashMap<String, Value>) -> Option<Value> {
+        obj.get(self.name()).cloned()
+    }
+
+    /// Convert the field's value from a row HashMap to a String representation.
+    fn value_to_string(&self, obj: &HashMap<String, Value>) -> String {
+        match obj.get(self.name()) {
+            Some(val) => match val {
+                Value::Null => "None".to_string(),
+                Value::String(s) => s.clone(),
+                Value::Number(n) => n.to_string(),
+                Value::Bool(b) => b.to_string(),
+                _ => val.to_string(),
+            },
+            None => String::new(),
+        }
+    }
 }
 
 /// Supported field types.
@@ -19,13 +39,16 @@ pub trait Field: Send + Sync + fmt::Debug {
 pub enum FieldTypes {
     AutoField,
     BigAutoField,
+    SmallAutoField,
     CharField,
     TextField,
     IntegerField,
     BigIntegerField,
+    PositiveBigIntegerField,
     FloatField,
     DecimalField,
     BooleanField,
+    NullBooleanField,
     DateTimeField,
     DateField,
     TimeField,
@@ -38,6 +61,7 @@ pub enum FieldTypes {
     DurationField,
     JSONField,
     BinaryField,
+    CommaSeparatedIntegerField,
     FileField,
     ImageField,
     FilePathField,
@@ -58,6 +82,10 @@ impl FieldTypes {
             (FieldTypes::TextField, _) => "TEXT",
             (FieldTypes::IntegerField, _) => "INTEGER",
             (FieldTypes::BigIntegerField, _) => "BIGINT",
+            (FieldTypes::PositiveBigIntegerField, _) => "BIGINT",
+            (FieldTypes::SmallAutoField, _) => "INTEGER",
+            (FieldTypes::NullBooleanField, _) => "INTEGER",
+            (FieldTypes::CommaSeparatedIntegerField, _) => "TEXT",
             (FieldTypes::FloatField, _) => "REAL",
             (FieldTypes::DecimalField, _) => "TEXT",
             (FieldTypes::BooleanField, _) => "INTEGER",
@@ -96,6 +124,10 @@ pub struct SimpleField {
     is_unique: bool,
     default_val: Option<Value>,
     max_length: Option<usize>,
+    db_index: bool,
+    db_column: Option<String>,
+    choices: Option<Vec<(String, String)>>,
+    help_text: Option<String>,
 }
 
 impl SimpleField {
@@ -103,11 +135,15 @@ impl SimpleField {
         Self {
             name: name.to_string(),
             field_type,
-            is_pk: matches!(field_type, FieldTypes::AutoField | FieldTypes::BigAutoField),
+            is_pk: matches!(field_type, FieldTypes::AutoField | FieldTypes::BigAutoField | FieldTypes::SmallAutoField),
             is_null: false,
             is_unique: false,
             default_val: None,
             max_length: None,
+            db_index: false,
+            db_column: None,
+            choices: None,
+            help_text: None,
         }
     }
 
@@ -128,6 +164,26 @@ impl SimpleField {
 
     pub fn max_length(mut self, n: usize) -> Self {
         self.max_length = Some(n);
+        self
+    }
+
+    pub fn db_index(mut self) -> Self {
+        self.db_index = true;
+        self
+    }
+
+    pub fn db_column(mut self, col: &str) -> Self {
+        self.db_column = Some(col.to_string());
+        self
+    }
+
+    pub fn choices(mut self, choices: Vec<(String, String)>) -> Self {
+        self.choices = Some(choices);
+        self
+    }
+
+    pub fn help_text(mut self, text: &str) -> Self {
+        self.help_text = Some(text.to_string());
         self
     }
 }

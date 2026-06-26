@@ -101,6 +101,8 @@ pub fn evaluate_tag(tag_name: &str, args: &[&str], context: &crate::context::Con
         "resetcycle" => handle_resetcycle(args, context, body),
         "partialdef" => handle_partialdef(args, context, body),
         "partial" => handle_partial(args, context, body),
+        "trans" => handle_trans(args, context, body),
+        "blocktrans" => handle_blocktrans(args, context, body),
         "comment" => String::new(),
         "empty" => String::new(),
         "endblock" | "endif" | "endfor" | "endcomment" | "endpartialdef" => String::new(),
@@ -285,6 +287,24 @@ fn handle_partial(args: &[&str], _context: &crate::context::Context, _body: &str
     let store = PARTIALS.get_or_init(|| Mutex::new(HashMap::new()));
     let partials = store.lock().unwrap();
     partials.get(name).cloned().unwrap_or_default()
+}
+
+/// {% trans "message" %} — translate a string (pass-through for now).
+fn handle_trans(args: &[&str], _context: &crate::context::Context, _body: &str) -> String {
+    if args.is_empty() {
+        return String::new();
+    }
+    let msg = args[0].trim_matches('"').trim_matches('\'');
+    // Pass-through: return the original string (English default)
+    // TODO: hook up real gettext with context variable substitution
+    msg.to_string()
+}
+
+/// {% blocktrans %}...{% endblocktrans %} — translate a block of text (pass-through for now).
+fn handle_blocktrans(_args: &[&str], _context: &crate::context::Context, body: &str) -> String {
+    // Pass-through: return the body unchanged
+    // TODO: support `with` expressions, count/plural forms, trimmed
+    body.to_string()
 }
 
 fn handle_url(args: &[&str], _context: &crate::context::Context) -> String {
@@ -713,5 +733,48 @@ mod tests {
         
         let result = evaluate_tag("url", &["\"user_detail\"", "42"], &ctx, "");
         assert_eq!(result, "/users/42/");
+    }
+
+    #[test]
+    fn test_trans_simple() {
+        let ctx = Context::new();
+        let result = evaluate_tag("trans", &["\"Hello\""], &ctx, "");
+        assert_eq!(result, "Hello");
+    }
+
+    #[test]
+    fn test_trans_with_single_quotes() {
+        let ctx = Context::new();
+        let result = evaluate_tag("trans", &["'World'"], &ctx, "");
+        assert_eq!(result, "World");
+    }
+
+    #[test]
+    fn test_trans_no_args() {
+        let ctx = Context::new();
+        let result = evaluate_tag("trans", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_blocktrans_passthrough() {
+        let ctx = Context::new();
+        let result = evaluate_tag("blocktrans", &[], &ctx, "Hello world");
+        assert_eq!(result, "Hello world");
+    }
+
+    #[test]
+    fn test_blocktrans_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("blocktrans", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_blocktrans_multiline() {
+        let ctx = Context::new();
+        let body = "Hello\nWorld\n";
+        let result = evaluate_tag("blocktrans", &[], &ctx, body);
+        assert_eq!(result, body);
     }
 }

@@ -50,6 +50,68 @@ impl Context {
             self.data.insert(k.clone(), v.clone());
         }
     }
+
+    pub fn into_inner(self) -> HashMap<String, Value> {
+        self.data
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = &String> {
+        self.data.keys()
+    }
+
+    pub fn remove(&mut self, key: &str) -> Option<Value> {
+        self.data.remove(key)
+    }
+
+    pub fn from_dict(dict: HashMap<String, Value>) -> Self {
+        Self {
+            data: dict,
+            autoescape: true,
+            use_l10n: false,
+            use_tz: true,
+        }
+    }
+}
+
+/// RequestContext like Django's `django.template.RequestContext`.
+/// Adds request, user, csrf_token, messages, settings from the active request.
+#[derive(Debug, Clone)]
+pub struct RequestContext {
+    pub context: Context,
+    pub request: Option<HashMap<String, Value>>,
+}
+
+impl RequestContext {
+    pub fn new() -> Self {
+        Self {
+            context: Context::new(),
+            request: None,
+        }
+    }
+
+    pub fn with_request(request: HashMap<String, Value>) -> Self {
+        let mut ctx = Self::new();
+        ctx.request = Some(request.clone());
+        let map: serde_json::Map<String, Value> = request.into_iter().collect();
+        ctx.context.insert("request".to_string(), Value::Object(map));
+        ctx
+    }
+
+    pub fn flatten(&self) -> HashMap<String, Value> {
+        self.context.flatten()
+    }
+
+    pub fn into_context(self) -> Context {
+        self.context
+    }
 }
 
 impl Default for Context {
