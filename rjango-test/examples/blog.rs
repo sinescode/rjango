@@ -4,7 +4,7 @@
 use rjango_core::{Request, Response, QueryDict, HttpMethod};
 use rjango_server::Application;
 use rjango_urls::{path, URLResolver};
-use rjango_middleware::{MiddlewareStack, Middleware};
+use rjango_middleware::MiddlewareStack;
 use std::sync::{Arc, Mutex};
 
 // ── In-memory database ────────────────────────────────────────────

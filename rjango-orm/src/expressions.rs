@@ -50,6 +50,7 @@ impl Q {
     }
 
     /// Add a child Q object.
+    #[allow(dead_code)]
     fn add_child(&mut self, child: Q) {
         self.children.push(QNode::Subquery(Box::new(child)));
     }

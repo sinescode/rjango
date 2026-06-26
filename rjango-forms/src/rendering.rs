@@ -1,8 +1,8 @@
 /// Form rendering utilities — renders form as HTML table, list, or divs.
 
 use std::collections::HashMap;
-use crate::FormState;
 use crate::fields::FormField;
+use crate::FormState;
 
 use serde_json::Value;
 

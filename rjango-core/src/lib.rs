@@ -21,9 +21,13 @@ pub mod serializers;
 pub mod staticfiles;
 pub mod handlers;
 pub mod shortcuts;
+pub mod signing;
+pub mod storage;
 
 pub use errors::{RjangoError, Result};
-pub use http::{Request, Response, QueryDict, HttpMethod, StatusCode};
+pub use signing::*;
+pub use storage::*;
+pub use http::{Request, Response, QueryDict, MultiValueDict, HttpMethod, StatusCode};
 pub use settings::Settings;
 pub use apps::{AppConfig, Registry};
 

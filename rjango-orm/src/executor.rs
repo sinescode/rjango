@@ -36,7 +36,7 @@ impl DatabaseConfig {
 }
 
 /// A database connection pool with real sqlx execution.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DatabasePool {
     pub config: DatabaseConfig,
     backend: DatabaseBackend,

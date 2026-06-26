@@ -279,7 +279,7 @@ mod tests {
     fn test_to_http_response() {
         let app = Application::new();
         let resp = rjango_core::Response::html("<h1>Hello</h1>");
-        let (status, headers, body) = app.to_http_response(resp);
+        let (status, _headers, body) = app.to_http_response(resp);
         assert_eq!(status, 200);
         assert!(!body.is_empty());
     }

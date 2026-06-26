@@ -144,6 +144,83 @@ impl From<u16> for StatusCode {
     fn from(n: u16) -> Self { Self(n) }
 }
 
+/// A dictionary that can hold multiple values per key (like Django's MultiValueDict / QueryDict).
+#[derive(Debug, Clone)]
+pub struct MultiValueDict {
+    data: HashMap<String, Vec<String>>,
+}
+
+impl MultiValueDict {
+    /// Create an empty MultiValueDict.
+    pub fn new() -> Self {
+        Self { data: HashMap::new() }
+    }
+
+    /// Get the first value for a key, or None if missing.
+    pub fn get(&self, key: &str) -> Option<&str> {
+        self.data.get(key).and_then(|v| v.first()).map(|s| s.as_str())
+    }
+
+    /// Get all values for a key.
+    pub fn get_list(&self, key: &str) -> Vec<&str> {
+        self.data.get(key).map(|v| v.iter().map(|s| s.as_str()).collect()).unwrap_or_default()
+    }
+
+    /// Add a value to the list for a key (appends, does not replace).
+    pub fn add(&mut self, key: &str, value: &str) {
+        self.data.entry(key.to_string()).or_default().push(value.to_string());
+    }
+
+    /// Replace all values for a key with a single value.
+    pub fn set(&mut self, key: &str, value: &str) {
+        self.data.insert(key.to_string(), vec![value.to_string()]);
+    }
+
+    /// Return all keys.
+    pub fn keys(&self) -> Vec<&String> {
+        self.data.keys().collect()
+    }
+
+    /// Return all (key, first-value) pairs.
+    pub fn items(&self) -> Vec<(&String, &String)> {
+        self.data.iter().filter_map(|(k, v)| v.first().map(|f| (k, f))).collect()
+    }
+
+    /// URL-encode the dict as a query string (like Django's urlencode).
+    pub fn urlencode(&self) -> String {
+        let mut parts = Vec::new();
+        let mut keys: Vec<&String> = self.data.keys().collect();
+        keys.sort();
+        for key in keys {
+            if let Some(values) = self.data.get(key) {
+                for val in values {
+                    if !parts.is_empty() {
+                        parts.push("&".to_string());
+                    }
+                    parts.push(format!("{}={}", key, val));
+                }
+            }
+        }
+        parts.concat()
+    }
+
+    /// Returns true if there are no keys.
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    /// Returns the number of unique keys.
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+}
+
+impl Default for MultiValueDict {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Incoming HTTP request.
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -191,6 +268,16 @@ impl Request {
 
     pub fn body_str(&self) -> std::borrow::Cow<'_, str> {
         String::from_utf8_lossy(&self.body)
+    }
+
+    /// Set the authenticated user on this request.
+    pub fn set_user(&mut self, user_data: serde_json::Map<String, serde_json::Value>) {
+        self.user = Some(serde_json::Value::Object(user_data));
+    }
+
+    /// Clear the authenticated user.
+    pub fn clear_user(&mut self) {
+        self.user = None;
     }
 }
 
@@ -343,5 +430,44 @@ mod tests {
         assert_eq!(StatusCode::OK.as_u16(), 200);
         assert_eq!(StatusCode::NOT_FOUND.as_u16(), 404);
         assert_eq!(StatusCode::NOT_FOUND.reason_phrase(), "Not Found");
+    }
+
+    #[test]
+    fn test_multi_value_dict() {
+        let mut d = MultiValueDict::new();
+        assert!(d.is_empty());
+        assert_eq!(d.len(), 0);
+
+        d.add("color", "red");
+        d.add("color", "blue");
+        d.add("size", "large");
+        assert!(!d.is_empty());
+        assert_eq!(d.len(), 2);
+        assert_eq!(d.get("color"), Some("red"));
+        assert_eq!(d.get_list("color"), vec!["red", "blue"]);
+        assert_eq!(d.get("size"), Some("large"));
+        assert_eq!(d.get("missing"), None);
+
+        let items = d.items();
+        assert_eq!(items.len(), 2);
+
+        let keys = d.keys();
+        assert_eq!(keys.len(), 2);
+
+        let encoded = d.urlencode();
+        assert!(encoded.contains("color=red"));
+        assert!(encoded.contains("color=blue"));
+        assert!(encoded.contains("size=large"));
+
+        d.set("color", "green");
+        assert_eq!(d.get_list("color"), vec!["green"]);
+
+        assert_eq!(MultiValueDict::default().len(), 0);
+    }
+
+    #[test]
+    fn test_multi_value_dict_empty_urlencode() {
+        let d = MultiValueDict::new();
+        assert_eq!(d.urlencode(), "");
     }
 }

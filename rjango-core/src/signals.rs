@@ -18,6 +18,7 @@ impl Signal {
         self.receivers.write().unwrap().push(Box::new(f));
     }
 
+    /// Send signal — all receivers run. Panics are NOT caught.
     pub fn send(&self, sender: &dyn Any) {
         let receivers = self.receivers.read().unwrap();
         for r in receivers.iter() {
@@ -25,9 +26,51 @@ impl Signal {
         }
     }
 
+    /// Send signal robustly — catches panics from individual receivers.
+    /// Returns (receiver_count, error_count).
+    pub fn send_robust(&self, sender: &dyn Any) -> (usize, usize) {
+        let receivers = self.receivers.read().unwrap();
+        let total = receivers.len();
+        let mut errors = 0;
+        for r in receivers.iter() {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                r(sender);
+            }));
+            if result.is_err() {
+                errors += 1;
+            }
+        }
+        (total, errors)
+    }
+
+    /// Disconnect all receivers.
+    pub fn disconnect(&self) {
+        self.receivers.write().unwrap().clear();
+    }
+
+    /// Number of connected receivers.
+    pub fn receiver_count(&self) -> usize {
+        self.receivers.read().unwrap().len()
+    }
+
     pub fn name(&self) -> &'static str {
         self.name
     }
+}
+
+/// Decorator syntax: `#[receiver(signal)] fn handler(sender: &dyn Any) { ... }`.
+/// Like Django's `@receiver(post_save)`.
+pub struct Receiver;
+
+impl Receiver {
+    pub fn connect<F: Fn(&dyn Any) + Send + Sync + 'static>(signal: &Signal, f: F) {
+        signal.connect(f);
+    }
+}
+
+/// Register a callback to a signal.
+pub fn receiver<F: Fn(&dyn Any) + Send + Sync + 'static>(signal: &Signal, callback: F) {
+    signal.connect(callback);
 }
 
 fn signal_registry() -> &'static RwLock<HashMap<&'static str, Signal>> {
@@ -56,7 +99,7 @@ pub fn request_finished() -> Signal { get_signal("request_finished") }
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     #[test]
     fn test_signal_connect_and_send() {
@@ -96,12 +139,61 @@ mod tests {
     #[test]
     fn test_signal_multiple_receivers() {
         let signal = Signal::new("multi");
-        let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = Arc::new(AtomicUsize::new(0));
         let c1 = counter.clone();
         let c2 = counter.clone();
         signal.connect(move |_| { c1.fetch_add(1, Ordering::SeqCst); });
         signal.connect(move |_| { c2.fetch_add(1, Ordering::SeqCst); });
         signal.send(&"test");
         assert_eq!(counter.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn test_send_robust() {
+        let signal = Signal::new("robust_test");
+        signal.connect(|_| { /* ok */ });
+        signal.connect(|_| panic!("receiver panic"));
+        signal.connect(|_| { /* ok */ });
+        let (total, errors) = signal.send_robust(&"test");
+        assert_eq!(total, 3);
+        assert_eq!(errors, 1);
+    }
+
+    #[test]
+    fn test_disconnect() {
+        let signal = Signal::new("disconnect_test");
+        signal.connect(|_| { });
+        signal.connect(|_| { });
+        assert_eq!(signal.receiver_count(), 2);
+        signal.disconnect();
+        assert_eq!(signal.receiver_count(), 0);
+    }
+
+    #[test]
+    fn test_receiver_function() {
+        let signal = Signal::new("receiver_test");
+        let called = Arc::new(AtomicBool::new(false));
+        let c = called.clone();
+        receiver(&signal, move |_| { c.store(true, Ordering::SeqCst); });
+        signal.send(&"ping");
+        assert!(called.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_receiver_count() {
+        let signal = Signal::new("count_test");
+        assert_eq!(signal.receiver_count(), 0);
+        signal.connect(|_| { });
+        assert_eq!(signal.receiver_count(), 1);
+    }
+
+    #[test]
+    fn test_send_robust_all_ok() {
+        let signal = Signal::new("all_ok");
+        signal.connect(|_| { });
+        signal.connect(|_| { });
+        let (total, errors) = signal.send_robust(&"x");
+        assert_eq!(total, 2);
+        assert_eq!(errors, 0);
     }
 }

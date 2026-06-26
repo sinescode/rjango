@@ -9,9 +9,14 @@ pub mod managers;
 pub mod backend;
 pub mod executor;
 pub mod expressions;
+pub mod lookups;
+pub mod aggregates;
+pub mod functions;
 
 pub use models::{Model, ModelMetadata};
 pub use query::{QuerySet, QueryBuilder};
+pub use lookups::{Lookup, FilterCondition, parse_filters, build_where_clause};
+pub use aggregates::{Aggregate, Aggregation, AggType};
 pub use fields::{Field, FieldTypes};
 pub use relationships::{ForeignKey, ManyToMany, OneToOne};
 pub use managers::{Manager, ModelManager};

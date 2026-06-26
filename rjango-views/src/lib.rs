@@ -220,6 +220,19 @@ pub struct UpdateView {
     pub pk_url_kwarg: String,
 }
 
+impl UpdateView {
+    /// Create a new UpdateView.
+    pub fn new(model_name: &str, template: &str, success: &str) -> Self {
+        Self {
+            template_name: template.to_string(),
+            model_name: model_name.to_string(),
+            fields: vec!["name".into(), "slug".into()],
+            success_url: success.to_string(),
+            pk_url_kwarg: "pk".into(),
+        }
+    }
+}
+
 impl View for UpdateView {
     fn call(&self, request: Request) -> Response {
         match request.method {
@@ -357,5 +370,89 @@ mod tests {
         let handler = as_handler(view);
         let resp = handler(Request::new(HttpMethod::GET, "/"));
         assert_eq!(resp.status_code(), 200);
+    }
+
+    #[test]
+    fn test_update_view_get() {
+        let view = UpdateView::new("Article", "edit.html", "/articles/");
+        let resp = view.call(Request::new(HttpMethod::GET, "/articles/1/edit/"));
+        assert!(resp.body_str().contains("Edit Article"));
+        assert_eq!(resp.status_code(), 200);
+    }
+
+    #[test]
+    fn test_update_view_post() {
+        let view = UpdateView::new("Article", "edit.html", "/articles/");
+        let resp = view.call(Request::new(HttpMethod::POST, "/articles/1/edit/"));
+        assert_eq!(resp.status_code(), 302);
+    }
+
+    #[test]
+    fn test_redirect_view_permanent() {
+        let mut view = RedirectView::new("/new/");
+        view.permanent = true;
+        let resp = view.call(Request::new(HttpMethod::GET, "/old/"));
+        assert_eq!(resp.status_code(), 301);
+        assert_eq!(resp.header("Location"), Some("/new/"));
+    }
+
+    #[test]
+    fn test_create_view_post() {
+        let view = CreateView {
+            template_name: "create.html".into(),
+            model_name: "Article".into(),
+            fields: vec!["title".into(), "body".into()],
+            success_url: "/articles/".into(),
+        };
+        let resp = view.call(Request::new(HttpMethod::POST, "/articles/new/"));
+        assert_eq!(resp.status_code(), 302);
+        assert_eq!(resp.header("Location"), Some("/articles/"));
+    }
+
+    #[test]
+    fn test_delete_view_post() {
+        let view = DeleteView {
+            template_name: "delete.html".into(),
+            model_name: "Article".into(),
+            success_url: "/articles/".into(),
+        };
+        let resp = view.call(Request::new(HttpMethod::POST, "/articles/1/delete/"));
+        assert_eq!(resp.status_code(), 302);
+        assert_eq!(resp.header("Location"), Some("/articles/"));
+    }
+
+    #[test]
+    fn test_template_view_with_context() {
+        let mut ctx = HashMap::new();
+        ctx.insert("title".into(), "My Page".into());
+        let view = TemplateView {
+            template_name: "page.html".into(),
+            extra_context: Some(ctx),
+        };
+        let resp = view.call(Request::new(HttpMethod::GET, "/page/"));
+        assert!(resp.body_str().contains("My Page"));
+    }
+
+    #[test]
+    fn test_view_trait_dispatch() {
+        struct TestView;
+        impl View for TestView {
+            fn call(&self, _req: Request) -> Response {
+                Response::html("Test OK")
+            }
+        }
+        let handler = as_handler(TestView);
+        let resp = handler(Request::new(HttpMethod::GET, "/"));
+        assert!(resp.body_str().contains("Test OK"));
+    }
+
+    #[test]
+    fn test_form_view_invalid_post() {
+        let view = FormView::new("form.html", "MyForm", "/done/");
+        // POST always redirects in this simple implementation
+        let req = Request::new(HttpMethod::POST, "/form/?invalid=true");
+        let resp = view.call(req);
+        assert_eq!(resp.status_code(), 302);
+        assert_eq!(resp.header("Location"), Some("/done/"));
     }
 }

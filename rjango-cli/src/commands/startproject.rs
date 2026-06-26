@@ -94,7 +94,7 @@ tracing-subscriber = "0.3"
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+    
 
     #[test]
     fn test_startproject_creates_files() {

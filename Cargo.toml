@@ -16,6 +16,7 @@ members = [
     "rjango-conf",
     "rjango-utils",
     "rjango-test",
+    "rjango-contrib",
 ]
 resolver = "2"
 

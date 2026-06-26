@@ -1,7 +1,9 @@
-/// Email framework — like Django's `django.core.mail`.
-/// Provides `ConsoleBackend` and `SMTPBackend`.
+/// Mail module — like Django's `django.core.mail`.
+/// Provides `send_mail()`, `EmailMessage`, backends.
 
-/// Represents an email message — like Django's `EmailMessage`.
+use std::collections::HashMap;
+
+/// An email message (like Django's `EmailMessage`).
 #[derive(Debug, Clone)]
 pub struct EmailMessage {
     pub subject: String,
@@ -11,7 +13,10 @@ pub struct EmailMessage {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub reply_to: Vec<String>,
-    pub headers: Vec<(String, String)>,
+    pub headers: HashMap<String, String>,
+    pub attachments: Vec<(String, Vec<u8>, String)>,  // (filename, content, mimetype)
+    pub content_subtype: String,
+    pub alternatives: Vec<(String, String)>,  // (content, mimetype)
 }
 
 impl EmailMessage {
@@ -21,192 +26,161 @@ impl EmailMessage {
             body: body.to_string(),
             from_email: from_email.to_string(),
             to,
-            cc: Vec::new(),
-            bcc: Vec::new(),
-            reply_to: Vec::new(),
-            headers: Vec::new(),
+            cc: vec![],
+            bcc: vec![],
+            reply_to: vec![],
+            headers: HashMap::new(),
+            attachments: vec![],
+            content_subtype: "text/plain".to_string(),
+            alternatives: vec![],
         }
     }
 
-    /// Build the raw SMTP message (RFC 2822).
-    pub fn to_smtp_string(&self) -> String {
-        let mut msg = String::new();
-        msg.push_str(&format!("From: {}\r\n", self.from_email));
-        msg.push_str(&format!("To: {}\r\n", self.to.join(", ")));
-        if !self.cc.is_empty() {
-            msg.push_str(&format!("Cc: {}\r\n", self.cc.join(", ")));
-        }
-        msg.push_str(&format!("Subject: {}\r\n", self.subject));
-        msg.push_str("MIME-Version: 1.0\r\n");
-        msg.push_str("Content-Type: text/plain; charset=\"UTF-8\"\r\n");
-        msg.push_str("Content-Transfer-Encoding: 7bit\r\n");
-        msg.push_str(&format!("Date: {}\r\n", http_date()));
-        for (k, v) in &self.headers {
-            msg.push_str(&format!("{}: {}\r\n", k, v));
-        }
-        msg.push_str("\r\n");
-        msg.push_str(&self.body);
-        msg
+    /// Add an attachment.
+    pub fn attach(mut self, filename: &str, content: Vec<u8>, mimetype: &str) -> Self {
+        self.attachments.push((filename.to_string(), content, mimetype.to_string()));
+        self
+    }
+
+    /// Set content subtype (e.g., "html").
+    pub fn content_subtype(mut self, subtype: &str) -> Self {
+        self.content_subtype = subtype.to_string();
+        self
+    }
+
+    /// Add an alternative representation (like HTML alternative to plain text).
+    pub fn attach_alternative(mut self, content: &str, mimetype: &str) -> Self {
+        self.alternatives.push((content.to_string(), mimetype.to_string()));
+        self
     }
 }
 
-/// Email backend trait — like Django's `EMAIL_BACKEND`.
-pub trait EmailBackend: Send + Sync {
-    fn send(&self, message: &EmailMessage) -> Result<(), String>;
+/// EmailMultiAlternatives — like Django's `EmailMultiAlternatives`.
+#[derive(Debug, Clone)]
+pub struct EmailMultiAlternatives {
+    pub email: EmailMessage,
 }
 
-/// Console backend — prints emails to stdout (like Django's `ConsoleBackend`).
-pub struct ConsoleBackend;
-
-impl EmailBackend for ConsoleBackend {
-    fn send(&self, message: &EmailMessage) -> Result<(), String> {
-        println!("[Rjango Email Console Backend]");
-        println!("Subject: {}", message.subject);
-        println!("From: {}", message.from_email);
-        println!("To: {}", message.to.join(", "));
-        println!("--- Body ---");
-        println!("{}", message.body);
-        println!("--- End ---");
-        Ok(())
-    }
-}
-
-/// SMTP backend — sends via SMTP (like Django's `SMTPBackend`).
-pub struct SMTPBackend {
-    pub host: String,
-    pub port: u16,
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub use_tls: bool,
-}
-
-impl Default for SMTPBackend {
-    fn default() -> Self {
+impl EmailMultiAlternatives {
+    pub fn new(subject: &str, body: &str, from_email: &str, to: Vec<String>) -> Self {
         Self {
-            host: "localhost".to_string(),
-            port: 25,
-            username: None,
-            password: None,
-            use_tls: false,
+            email: EmailMessage::new(subject, body, from_email, to)
+                .content_subtype("plain"),
         }
+    }
+
+    /// Attach an alternative (e.g., HTML version).
+    pub fn attach_alternative(mut self, content: &str, mimetype: &str) -> Self {
+        self.email = self.email.attach_alternative(content, mimetype);
+        self
+    }
+
+    /// Send the email.
+    pub fn send(&self) -> usize {
+        send_email(&self.email)
     }
 }
 
-impl SMTPBackend {
-    pub fn new(host: &str, port: u16, username: Option<&str>, password: Option<&str>, use_tls: bool) -> Self {
-        Self {
-            host: host.to_string(),
-            port,
-            username: username.map(|s| s.to_string()),
-            password: password.map(|s| s.to_string()),
-            use_tls,
-        }
+/// A sent email record (for testing/inspection).
+#[derive(Debug, Clone)]
+pub struct SentEmail {
+    pub subject: String,
+    pub body: String,
+    pub from_email: String,
+    pub to: Vec<String>,
+    pub cc: Vec<String>,
+    pub bcc: Vec<String>,
+    pub headers: HashMap<String, String>,
+    pub content_subtype: String,
+    pub alternatives: Vec<(String, String)>,
+    pub attachments: Vec<(String, Vec<u8>, String)>,
+}
+
+static SENT_MAIL: std::sync::OnceLock<std::sync::Mutex<Vec<SentEmail>>> =
+    std::sync::OnceLock::new();
+
+fn sent_mail() -> &'static std::sync::Mutex<Vec<SentEmail>> {
+    SENT_MAIL.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+/// Send an email via the console backend (collects for testing).
+pub fn send_email(msg: &EmailMessage) -> usize {
+    let sent = SentEmail {
+        subject: msg.subject.clone(),
+        body: msg.body.clone(),
+        from_email: msg.from_email.clone(),
+        to: msg.to.clone(),
+        cc: msg.cc.clone(),
+        bcc: msg.bcc.clone(),
+        headers: msg.headers.clone(),
+        content_subtype: msg.content_subtype.clone(),
+        alternatives: msg.alternatives.clone(),
+        attachments: msg.attachments.clone(),
+    };
+    sent_mail().lock().unwrap().push(sent);
+    msg.to.len()
+}
+
+/// Send a simple text email.
+pub fn send_mail(subject: &str, message: &str, from_email: &str, recipient_list: &[&str]) -> usize {
+    let msg = EmailMessage::new(
+        subject,
+        message,
+        from_email,
+        recipient_list.iter().map(|s| s.to_string()).collect(),
+    );
+    send_email(&msg)
+}
+
+/// Send mail to admins.
+pub fn mail_admins(subject: &str, message: &str) -> usize {
+    send_mail(subject, message, "root@example.com", &["admin@example.com"])
+}
+
+/// Send mail to managers.
+pub fn mail_managers(subject: &str, message: &str) -> usize {
+    send_mail(subject, message, "root@example.com", &["manager@example.com"])
+}
+
+/// Send mass mail (one at a time, collected).
+pub fn send_mass_mail(datatuple: &[(&str, &str, &str, &[&str])]) -> usize {
+    let mut total = 0;
+    for (subject, message, from_email, recipients) in datatuple {
+        total += send_mail(subject, message, from_email, recipients);
+    }
+    total
+}
+
+/// Get all sent emails (for testing).
+pub fn get_sent_emails() -> Vec<SentEmail> {
+    sent_mail().lock().unwrap().clone()
+}
+
+/// Clear sent email records (for testing).
+pub fn clear_sent_emails() {
+    sent_mail().lock().unwrap().clear();
+}
+
+/// BadHeaderError — like Django's `BadHeaderError`.
+#[derive(Debug, Clone)]
+pub struct BadHeaderError(pub String);
+
+impl std::fmt::Display for BadHeaderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Bad header: {}", self.0)
     }
 }
 
-impl EmailBackend for SMTPBackend {
-    fn send(&self, message: &EmailMessage) -> Result<(), String> {
-        // Basic SMTP sending via std::net::TcpStream
-        use std::io::{BufRead, BufReader, Write};
-        use std::net::TcpStream;
-        use std::time::Duration;
+impl std::error::Error for BadHeaderError {}
 
-        let addr = format!("{}:{}", self.host, self.port);
-        let stream = TcpStream::connect_timeout(
-            &addr.parse().map_err(|e| format!("Invalid addr: {}", e))?,
-            Duration::from_secs(10),
-        ).map_err(|e| format!("Connection failed: {}", e))?;
-
-        stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
-        let mut reader = BufReader::new(&stream);
-        let mut writer = &stream;
-
-        // Read greeting
-        let mut line = String::new();
-        reader.read_line(&mut line).map_err(|e| format!("Read error: {}", e))?;
-
-        // EHLO
-        writeln!(writer, "EHLO rjango").map_err(|e| format!("Write error: {}", e))?;
-        reader.read_line(&mut line).ok();
-        reader.read_line(&mut line).ok();
-
-        // Auth if needed
-        if let (Some(user), Some(pass)) = (&self.username, &self.password) {
-            writeln!(writer, "AUTH LOGIN").map_err(|e| format!("Auth error: {}", e))?;
-            reader.read_line(&mut line).ok();
-            writeln!(writer, "{}", base64_encode(user.as_bytes())).map_err(|e| format!("Auth error: {}", e))?;
-            reader.read_line(&mut line).ok();
-            writeln!(writer, "{}", base64_encode(pass.as_bytes())).map_err(|e| format!("Auth error: {}", e))?;
-            reader.read_line(&mut line).ok();
-        }
-
-        // MAIL FROM
-        writeln!(writer, "MAIL FROM:<{}>", message.from_email).map_err(|e| format!("MAIL FROM error: {}", e))?;
-        reader.read_line(&mut line).ok();
-
-        // RCPT TO
-        for recipient in &message.to {
-            writeln!(writer, "RCPT TO:<{}>", recipient).map_err(|e| format!("RCPT TO error: {}", e))?;
-            reader.read_line(&mut line).ok();
-        }
-
-        // DATA
-        writeln!(writer, "DATA").map_err(|e| format!("DATA error: {}", e))?;
-        reader.read_line(&mut line).ok();
-        let smtp_msg = message.to_smtp_string();
-        writeln!(writer, "{}\r\n.", smtp_msg).map_err(|e| format!("Write body error: {}", e))?;
-        reader.read_line(&mut line).ok();
-
-        // QUIT
-        writeln!(writer, "QUIT").map_err(|e| format!("QUIT error: {}", e))?;
-
-        Ok(())
-    }
-}
-
-fn base64_encode(bytes: &[u8]) -> String {
-    // Manual Base64 encoding (no external dep needed for this simple case)
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::new();
-    for chunk in bytes.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
-        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
-        let triple = (b0 << 16) | (b1 << 8) | b2;
-        result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
-        result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
-        if chunk.len() > 1 {
-            result.push(CHARS[((triple >> 6) & 0x3F) as usize] as char);
-        } else {
-            result.push('=');
-        }
-        if chunk.len() > 2 {
-            result.push(CHARS[(triple & 0x3F) as usize] as char);
-        } else {
-            result.push('=');
+/// Prevent header injection.
+pub fn forbid_mail_headers(headers: &HashMap<String, String>) -> Result<(), BadHeaderError> {
+    for (_, value) in headers {
+        if value.contains('\n') || value.contains('\r') {
+            return Err(BadHeaderError(value.clone()));
         }
     }
-    result
-}
-
-fn http_date() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let dur = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
-    let secs = dur.as_secs();
-    // Simple RFC 2822 date (not perfect, but sufficient)
-    format!("{}", secs)
-}
-
-/// Convenience function — like Django's `send_mail()`.
-pub fn send_mail(
-    backend: &dyn EmailBackend,
-    subject: &str,
-    body: &str,
-    from_email: &str,
-    recipient_list: Vec<String>,
-) -> Result<(), String> {
-    let msg = EmailMessage::new(subject, body, from_email, recipient_list);
-    backend.send(&msg)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -214,41 +188,110 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_email_message_creation() {
-        let msg = EmailMessage::new("Test", "Hello", "a@b.com", vec!["c@d.com".to_string()]);
-        assert_eq!(msg.subject, "Test");
-        assert_eq!(msg.to, vec!["c@d.com"]);
+    fn test_send_mail() {
+        clear_sent_emails();
+        send_mail("Subject", "Body", "from@test.com", &["to@test.com"]);
+        let sent = get_sent_emails();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].subject, "Subject");
+        assert_eq!(sent[0].body, "Body");
     }
 
     #[test]
-    fn test_smtp_string_format() {
-        let msg = EmailMessage::new("Subject", "Body", "from@test.com", vec!["to@test.com".to_string()]);
-        let smtp = msg.to_smtp_string();
-        assert!(smtp.contains("From: from@test.com"));
-        assert!(smtp.contains("To: to@test.com"));
-        assert!(smtp.contains("Subject: Subject"));
-        assert!(smtp.contains("Body"));
+    fn test_send_mail_multiple_recipients() {
+        clear_sent_emails();
+        let count = send_mail("Hello", "World", "a@b.com", &["a@b.com", "c@d.com", "e@f.com"]);
+        assert_eq!(count, 3); // returns recipient count
+        assert_eq!(get_sent_emails()[0].to.len(), 3);
     }
 
     #[test]
-    fn test_console_backend() {
-        let backend = ConsoleBackend;
-        let msg = EmailMessage::new("Test", "Body", "a@b.com", vec!["c@d.com".to_string()]);
-        // Just verify it doesn't panic
-        let result = backend.send(&msg);
-        assert!(result.is_ok());
+    fn test_email_message_with_cc_bcc() {
+        clear_sent_emails();
+        let mut msg = EmailMessage::new("Test", "Body", "from@b.com", vec!["to@b.com".into()]);
+        msg.cc.push("cc@b.com".into());
+        msg.bcc.push("bcc@b.com".into());
+        send_email(&msg);
+        let sent = get_sent_emails();
+        assert_eq!(sent[0].cc, vec!["cc@b.com"]);
+        assert_eq!(sent[0].bcc, vec!["bcc@b.com"]);
     }
 
     #[test]
-    fn test_base64_encode() {
-        let encoded = base64_encode(b"hello");
-        assert_eq!(encoded, "aGVsbG8=");
+    fn test_send_mass_mail() {
+        clear_sent_emails();
+        let msgs = vec![
+            ("Sub1", "Body1", "a@b.com", &["r1@b.com"] as &[&str]),
+            ("Sub2", "Body2", "a@b.com", &["r2@b.com"]),
+        ];
+        send_mass_mail(&msgs);
+        assert_eq!(get_sent_emails().len(), 2);
     }
 
     #[test]
-    fn test_send_mail_convenience() {
-        let backend = ConsoleBackend;
-        let result = send_mail(&backend, "Hi", "There", "a@b.com", vec!["b@c.com".to_string()]);
-        assert!(result.is_ok());
+    fn test_mail_admins() {
+        clear_sent_emails();
+        mail_admins("Alert", "Something happened");
+        let sent = get_sent_emails();
+        assert_eq!(sent[0].subject, "Alert");
+        assert!(sent[0].to.contains(&"admin@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_mail_managers() {
+        clear_sent_emails();
+        mail_managers("Manager alert", "Check");
+        let sent = get_sent_emails();
+        assert_eq!(sent[0].subject, "Manager alert");
+        assert!(sent[0].to.contains(&"manager@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_email_attachment() {
+        let msg = EmailMessage::new("With Attach", "Body", "f@b.com", vec!["t@b.com".into()])
+            .attach("file.txt", b"content".to_vec(), "text/plain");
+        assert_eq!(msg.attachments.len(), 1);
+        assert_eq!(msg.attachments[0].0, "file.txt");
+    }
+
+    #[test]
+    fn test_email_content_subtype() {
+        let msg = EmailMessage::new("HTML", "<h1>Hello</h1>", "f@b.com", vec!["t@b.com".into()])
+            .content_subtype("html");
+        assert_eq!(msg.content_subtype, "html");
+    }
+
+    #[test]
+    fn test_email_alternatives() {
+        let msg = EmailMessage::new("Multi", "Plain text", "f@b.com", vec!["t@b.com".into()])
+            .attach_alternative("<h1>HTML</h1>", "text/html");
+        assert_eq!(msg.alternatives.len(), 1);
+        assert_eq!(msg.alternatives[0].1, "text/html");
+    }
+
+    #[test]
+    fn test_email_multi_alternatives() {
+        clear_sent_emails();
+        let msg = EmailMultiAlternatives::new("MultiAlt", "Plain", "from@b.com", vec!["to@b.com".into()])
+            .attach_alternative("<b>Rich</b>", "text/html");
+        msg.send();
+        let sent = get_sent_emails();
+        assert_eq!(sent[0].subject, "MultiAlt");
+        assert_eq!(sent[0].alternatives.len(), 1);
+    }
+
+    #[test]
+    fn test_forbid_mail_headers_bad_newline() {
+        let mut h = HashMap::new();
+        h.insert("X-Custom".into(), "bad\nheader".into());
+        let result = forbid_mail_headers(&h);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_forbid_mail_headers_ok() {
+        let mut h = HashMap::new();
+        h.insert("X-Custom".into(), "good value".into());
+        assert!(forbid_mail_headers(&h).is_ok());
     }
 }

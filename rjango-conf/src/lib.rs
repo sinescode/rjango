@@ -53,7 +53,7 @@ pub fn root_urlconf() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    
 
     #[test]
     fn test_get_settings_default() {

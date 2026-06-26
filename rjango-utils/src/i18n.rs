@@ -72,6 +72,32 @@ pub fn gettext_alias(msgid: &str) -> String {
     gettext(msgid)
 }
 
+/// Alias for ngettext — handle plural forms.
+pub fn ngettext(msgid: &str, msgid_plural: &str, count: usize) -> String {
+    if count == 1 {
+        msgid.to_string()
+    } else {
+        msgid_plural.to_string()
+    }
+}
+
+/// Alias for ngettext_lazy.
+pub fn ngettext_lazy(msgid: &str, msgid_plural: &str, count: usize) -> LazyString {
+    let s = ngettext(msgid, msgid_plural, count);
+    LazyString::new(&s)
+}
+
+/// Format a date using locale-appropriate patterns (pass-through for now).
+pub fn date_format(value: &str, _format: &str) -> String {
+    // Pass-through: returns the value unchanged
+    value.to_string()
+}
+
+/// Convert a number to locale-appropriate string (pass-through for now).
+pub fn number_format(value: &str) -> String {
+    value.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,5 +155,36 @@ mod tests {
     fn test_gettext_with_special_chars() {
         assert_eq!(gettext("héllo wörld"), "héllo wörld");
         assert_eq!(gettext("line1\nline2"), "line1\nline2");
+    }
+
+    #[test]
+    fn test_ngettext_singular() {
+        assert_eq!(ngettext("item", "items", 1), "item");
+    }
+
+    #[test]
+    fn test_ngettext_plural() {
+        assert_eq!(ngettext("item", "items", 5), "items");
+    }
+
+    #[test]
+    fn test_ngettext_zero() {
+        assert_eq!(ngettext("item", "items", 0), "items");
+    }
+
+    #[test]
+    fn test_ngettext_lazy() {
+        let lazy = ngettext_lazy("child", "children", 3);
+        assert_eq!(lazy.evaluate(), "children");
+    }
+
+    #[test]
+    fn test_date_format() {
+        assert_eq!(date_format("2026-06-26", "Y-m-d"), "2026-06-26");
+    }
+
+    #[test]
+    fn test_number_format() {
+        assert_eq!(number_format("1234.56"), "1234.56");
     }
 }

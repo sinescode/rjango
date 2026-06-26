@@ -141,7 +141,6 @@ impl FileSystemStorage {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::Path;
 
     // ── File / ContentFile tests ──────────────────────────────────────────
 

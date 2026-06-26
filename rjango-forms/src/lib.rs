@@ -5,6 +5,7 @@ pub mod fields;
 pub mod widgets;
 pub mod rendering;
 pub mod modelform;
+pub mod formsets;
 
 use std::collections::HashMap;
 use serde_json::Value;
@@ -100,7 +101,7 @@ impl Form {
 
             // Run validators
             for validator in &field.validators {
-                if let Err(msg) = validator.validate(&raw_value) {
+                if let Some(msg) = validator.validate(&raw_value) {
                     field_errors.push(msg);
                 }
             }

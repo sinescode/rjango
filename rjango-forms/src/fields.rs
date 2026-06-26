@@ -39,7 +39,7 @@ impl FormField {
             FieldType::Integer => super::widgets::WidgetType::NumberInput,
             FieldType::Float => super::widgets::WidgetType::NumberInput,
             FieldType::Boolean => super::widgets::WidgetType::CheckboxInput,
-            FieldType::Choice(_) => super::widgets::WidgetType::Select,
+            FieldType::Choice(_) => super::widgets::WidgetType::Select(vec![]),
             FieldType::TextArea => super::widgets::WidgetType::Textarea,
             FieldType::Date => super::widgets::WidgetType::DateInput,
             FieldType::DateTime => super::widgets::WidgetType::DateTimeInput,
@@ -236,7 +236,7 @@ mod tests {
             ("R".into(), "Red".into()),
             ("B".into(), "Blue".into()),
         ]));
-        assert!(matches!(field.widget, crate::widgets::WidgetType::Select));
+        assert!(matches!(field.widget, crate::widgets::WidgetType::Select(_)));
     }
 
     #[test]

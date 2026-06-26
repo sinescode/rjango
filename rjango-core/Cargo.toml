@@ -18,6 +18,11 @@ percent-encoding.workspace = true
 mime_guess.workspace = true
 toml = "0.8"
 async-trait.workspace = true
+sha2.workspace = true
+hmac.workspace = true
+sha1 = "0.10"
+flate2 = "1.0"
+base64.workspace = true
 
 [dev-dependencies]
 tempfile = "3.27.0"

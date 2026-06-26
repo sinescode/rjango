@@ -21,6 +21,8 @@ pub mod csrf;
 pub mod security;
 pub mod session;
 pub mod messages;
+pub mod clickjacking;
+pub mod common;
 
 /// Middleware stack — applies all middleware in order.
 pub struct MiddlewareStack {

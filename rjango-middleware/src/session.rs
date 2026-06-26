@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_session_middleware_implements_middleware() {
-        let mw = SessionMiddleware::new();
+        let _mw = SessionMiddleware::new();
         // The type must implement the Middleware trait
         fn assert_middleware<T: Middleware>() {}
         assert_middleware::<SessionMiddleware>();

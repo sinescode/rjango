@@ -24,7 +24,7 @@ mod tests {
 
     #[test]
     fn test_message_middleware_new() {
-        let mw = MessageMiddleware;
+        let _mw = MessageMiddleware;
         fn assert_middleware<T: Middleware>() {}
         assert_middleware::<MessageMiddleware>();
     }

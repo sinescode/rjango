@@ -52,7 +52,7 @@ mod tests {
 
     #[test]
     fn test_auth_middleware_new() {
-        let mw = AuthMiddleware;
+        let _mw = AuthMiddleware;
         // Unit struct - verify it compiles and exists
     }
 

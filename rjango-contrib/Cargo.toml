@@ -1,0 +1,16 @@
+[package]
+name = "rjango-contrib"
+version.workspace = true
+edition.workspace = true
+description = "Django contrib apps: flatpages, sitemaps, syndication, humanize, redirects, messages, staticfiles"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+rjango-core = { path = "../rjango-core" }
+rjango-orm = { path = "../rjango-orm" }
+rjango-templates = { path = "../rjango-templates" }
+rjango-urls = { path = "../rjango-urls" }
+rjango-middleware = { path = "../rjango-middleware" }
+rjango-forms = { path = "../rjango-forms" }

@@ -91,7 +91,7 @@ fn default_widget(field_type: &FieldType) -> WidgetType {
         FieldType::Password => WidgetType::PasswordInput,
         FieldType::Date => WidgetType::DateInput,
         FieldType::DateTime => WidgetType::DateTimeInput,
-        FieldType::Choice(_) => WidgetType::Select,
+        FieldType::Choice(_) => WidgetType::Select(vec![]),
         _ => WidgetType::TextInput,
     }
 }

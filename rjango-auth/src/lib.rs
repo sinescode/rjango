@@ -6,8 +6,11 @@ pub mod middleware_;
 pub mod views;
 pub mod hashers;
 pub mod decorators;
+pub mod password_validation;
+pub mod forms;
 
 pub use models::{User, AnonymousUser};
+pub use forms::{AuthenticationForm, PasswordResetForm, SetPasswordForm, PasswordChangeForm, UserCreationForm, AuthFormResult};
 pub use backends::AuthenticationBackend;
 
 use std::sync::Mutex;
@@ -53,9 +56,51 @@ pub fn login_required(request: &rjango_core::Request) -> Option<rjango_core::Res
     middleware_::login_required(request)
 }
 
+/// Authenticate with username and password across registered backends.
+pub fn authenticate(request: Option<&rjango_core::Request>, username: &str, password: &str) -> Option<User> {
+    let default_req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/");
+    let req = request.unwrap_or(&default_req);
+    if let Ok(backends) = init_backends().lock() {
+        for backend in backends.iter() {
+            if let Some(user) = backend.authenticate(req, username, password) {
+                return Some(user);
+            }
+        }
+    }
+    None
+}
+
+/// Look up a user by username (stub — replace with actual DB lookup).
+pub fn get_user_by_username(username: &str) -> Option<User> {
+    // Placeholder: in production, query the users table.
+    // This exists to satisfy forms.rs which calls it.
+    let _ = username;
+    None
+}
+
 /// Human-readable permission string like "app_label.view_modelname".
 pub fn make_perm(app_label: &str, action: &str, model_name: &str) -> String {
     format!("{}.{}_{}", app_label, action, model_name)
+}
+
+/// Get the User model class (placeholder — always returns the default User).
+pub fn get_user_model() -> models::User {
+    models::User::new("anonymous", "")
+}
+
+/// Log a user in — sets the user in the request's session.
+pub fn login(request: &mut rjango_core::Request, user: &User) {
+    // Store minimal user info in the request
+    let mut user_data = serde_json::Map::new();
+    user_data.insert("id".into(), serde_json::Value::Number(serde_json::Number::from(user.id)));
+    user_data.insert("username".into(), serde_json::Value::String(user.username.clone()));
+    user_data.insert("is_authenticated".into(), serde_json::Value::Bool(true));
+    request.set_user(user_data);
+}
+
+/// Log a user out — clears the authenticated user from the request.
+pub fn logout(request: &mut rjango_core::Request) {
+    request.clear_user();
 }
 
 pub use views::{login_view, handle_login, logout_view};

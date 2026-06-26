@@ -183,6 +183,29 @@ impl AdminSite {
         }).collect();
         rows.push_str(&format!("<tr>{}</tr>", placeholder_row));
 
+        // Build list_filter sidebar
+        let mut filter_html = String::new();
+        for f in &admin.list_filter {
+            filter_html.push_str(&format!(
+                "<div class=\"filter\"><label>{}</label>\n\
+                 <select name=\"{}__filter\">\n\
+                 <option value=\"\">All</option>\n\
+                 <option value=\"1\">Yes</option>\n\
+                 <option value=\"0\">No</option>\n\
+                 </select></div>", f, f));
+        }
+
+        // Build search box
+        let search_html = if admin.search_fields.is_empty() {
+            String::new()
+        } else {
+            let field_list = admin.search_fields.join(", ");
+            format!(
+                "<div class=\"search\">\n\
+                 <input type=\"text\" name=\"q\" placeholder=\"Search ({}):\" style=\"width:100%%;\">\n\
+                 </div>", field_list)
+        };
+
         let body = format!(
             r#"<!DOCTYPE html><html lang="en"><head>
             <meta charset="UTF-8"><title>{} – Rjango Admin</title>
@@ -204,6 +227,10 @@ impl AdminSite {
                 .btn-primary{{background:#417690;color:#fff}}
                 .btn-primary:hover{{background:#305f72}}
                 .actions{{margin-bottom:15px}}
+                .filter-sidebar{{float:right;width:200px;margin-left:20px}}
+                .filter{{margin-bottom:10px}}
+                .filter label{{font-weight:600;font-size:12px;display:block;margin-bottom:3px}}
+                .search{{margin-bottom:15px}}
             </style></head><body>
             <div class="header"><h1><a href="/admin/">Rjango Admin</a></h1></div>
             <div class="container">
@@ -212,12 +239,14 @@ impl AdminSite {
             <div class="card">
             <div class="card-header">{}</div>
             <div class="card-body">
+            {}
             <table><thead><tr>{}</tr></thead><tbody>{}</tbody></table>
             </div></div></div></body></html>"#,
             admin.model_name,
             admin.model_name, app_label,
             admin.model_name,
             format!("{} objects", admin.model_name),
+            format!("{}{}", search_html, if !filter_html.is_empty() { format!("<div class=\"filter-sidebar\">{}</div>", filter_html) } else { String::new() }),
             headers, rows
         );
         Response::html(body)
@@ -275,6 +304,47 @@ impl AdminSite {
             None => return Response::not_found(),
         };
 
+        // Build fieldsets or fallback to a default field list
+        let mut field_sections = String::new();
+        if let Some(ref fieldsets) = admin.fieldsets {
+            for (title, fields) in fieldsets {
+                let fields_html: String = fields.iter().map(|f| {
+                    let is_readonly = admin.readonly_fields.contains(f);
+                    if is_readonly {
+                        format!("<div class=\"form-row\"><label>{}</label><p class=\"readonly\">(current value)</p></div>", f)
+                    } else {
+                        format!("<div class=\"form-row\"><label for=\"{}\">{}</label><input type=\"text\" name=\"{}\" id=\"{}\"></div>", f, f, f, f)
+                    }
+                }).collect();
+                field_sections.push_str(&format!(
+                    "<fieldset><legend>{}</legend>{}</fieldset>", title, fields_html));
+            }
+        } else {
+            // Default: show all non-readonly fields
+            let default_fields = ["name", "slug", "active", "created_at"];
+            for f in &default_fields {
+                let is_readonly = admin.readonly_fields.contains(&f.to_string());
+                if is_readonly {
+                    field_sections.push_str(&format!("<div class=\"form-row\"><label>{}</label><p class=\"readonly\">(read only)</p></div>", f));
+                } else {
+                    field_sections.push_str(&format!("<div class=\"form-row\"><label for=\"{}\">{}</label><input type=\"text\" name=\"{}\" id=\"{}\"></div>", f, f, f, f));
+                }
+            }
+        }
+
+        // Render inlines
+        let mut inlines_html = String::new();
+        for inline in &admin.inlines {
+            inlines_html.push_str(&format!(
+                "<div class=\"inline\">\n\
+                 <h3>{} ({})</h3>\n\
+                 <p>FK: {} | Extra: {} | Min: {} | Max: {} | Can delete: {}</p>\n\
+                 </div>",
+                inline.model_name, inline.app_label,
+                inline.fk_field, inline.extra, inline.min_num, inline.max_num, inline.can_delete
+            ));
+        }
+
         let body = format!(
             r#"<!DOCTYPE html><html lang="en"><head>
             <meta charset="UTF-8"><title>Change {} – Rjango Admin</title>
@@ -286,6 +356,14 @@ impl AdminSite {
                 .card{{background:#fff;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}}
                 .card-header{{background:#f8f8f8;padding:10px 15px;border-bottom:1px solid #eee;font-weight:600}}
                 .card-body{{padding:15px}}
+                .form-row{{margin-bottom:15px}}
+                .form-row label{{display:block;font-weight:600;font-size:13px;margin-bottom:5px}}
+                .form-row input{{width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box}}
+                .readonly{{color:#666;font-style:italic;padding:8px;background:#f5f5f5;border-radius:4px}}
+                fieldset{{border:1px solid #ddd;border-radius:4px;padding:15px;margin-bottom:15px}}
+                legend{{font-weight:600;color:#417690;padding:0 5px}}
+                .inline{{background:#f9f9f9;padding:10px;border:1px solid #ddd;border-radius:4px;margin-bottom:10px}}
+                .inline h3{{margin:0 0 5px 0;font-size:14px;color:#417690}}
                 .btn{{display:inline-block;padding:8px 16px;border-radius:4px;text-decoration:none;
                        border:none;cursor:pointer;font-size:14px}}
                 .btn-primary{{background:#417690;color:#fff}}
@@ -299,13 +377,15 @@ impl AdminSite {
             <div class="card-header">{}</div>
             <div class="card-body">
             <form method="post">
-                <p style="color:#999;margin-bottom:15px">Change form would appear here.</p>
+                {}
+                {}
                 <button type="submit" class="btn btn-primary">Save</button>
                 <a href="../delete/" class="btn btn-danger">Delete</a>
                 <a href="../" class="btn btn-secondary">Cancel</a>
             </form>
             </div></div></div></body></html>"#,
-            admin.model_name, admin.model_name, admin.model_name
+            admin.model_name, admin.model_name, admin.model_name,
+            field_sections, inlines_html
         );
         Response::html(body)
     }
@@ -694,7 +774,7 @@ mod tests {
     fn test_admin_site_urls_generates_resolver() {
         let mut site = AdminSite::new();
         site.register("blog", crate::ModelAdmin::new("blog", "Post"));
-        let resolver = site.urls();
+        let _resolver = site.urls();
         // Resolver should have patterns for index + changelist + add
         // Just verify it doesn't panic
     }

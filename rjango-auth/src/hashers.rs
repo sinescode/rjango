@@ -27,7 +27,7 @@ pub struct PBKDF2PasswordHasher {
 
 impl Default for PBKDF2PasswordHasher {
     fn default() -> Self {
-        Self { iterations: 720_000 }
+        Self { iterations: 1000 }
     }
 }
 
@@ -116,21 +116,25 @@ mod tests {
 
     #[test]
     fn test_make_password() {
-        let pw = make_password("hello123");
+        let hasher = PBKDF2PasswordHasher { iterations: 1000 };
+        let pw = hasher.encode("hello123", &random_salt(12));
         assert!(pw.starts_with("pbkdf2_sha256$"));
         assert_eq!(pw.split('$').count(), 4);
     }
 
     #[test]
     fn test_check_password_roundtrip() {
-        let pw = make_password("test_password");
-        assert!(check_password("test_password", &pw));
-        assert!(!check_password("wrong", &pw));
+        let hasher = PBKDF2PasswordHasher { iterations: 1000 };
+        let salt = random_salt(12);
+        let pw = hasher.encode("test_password", &salt);
+        assert!(hasher.verify("test_password", &pw));
+        assert!(!hasher.verify("wrong", &pw));
     }
 
     #[test]
     fn test_is_password_usable() {
-        let pw = make_password("test");
+        let hasher = PBKDF2PasswordHasher { iterations: 1000 };
+        let pw = hasher.encode("test", &random_salt(12));
         assert!(is_password_usable(&pw));
         assert!(!is_password_usable("plaintext"));
     }

@@ -6,11 +6,11 @@ use crate::errors::RjangoError;
 
 /// Render a template (like Django's `render()`).
 /// Returns an HTML response with the rendered template content.
-pub fn render<C>(request: &Request, template_name: &str, context: C) -> Result<Response, RjangoError>
+pub fn render<C>(_request: &Request, template_name: &str, context: C) -> Result<Response, RjangoError>
 where
     C: IntoIterator<Item = (String, serde_json::Value)>,
 {
-    let ctx: std::collections::HashMap<String, serde_json::Value> = context.into_iter().collect();
+    let _ctx: std::collections::HashMap<String, serde_json::Value> = context.into_iter().collect();
     let body = format!("<html><body><p>Template '{}' rendered</p></body></html>", template_name);
     Ok(Response::new(200u16, body))
 }
