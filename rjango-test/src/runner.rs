@@ -31,7 +31,7 @@ mod tests {
 
     #[test]
     fn test_test_runner_default_pattern() {
-        let runner = TestRunner::new();
+        let _runner = TestRunner::new();
         // Pattern is private but we can verify the struct compiles
         assert!(true);
     }

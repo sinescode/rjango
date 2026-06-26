@@ -72,8 +72,8 @@ mod tests {
 
     #[test]
     fn test_test_runner_new() {
-        let runner = TestRunner::new();
-        let results = runner.run();
+        let test_runner = TestRunner::new();
+        let results = test_runner.run();
         assert!(results.is_empty());
     }
 

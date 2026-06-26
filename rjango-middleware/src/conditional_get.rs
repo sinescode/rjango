@@ -16,7 +16,7 @@ impl Middleware for ConditionalGetMiddleware {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rjango_core::{HttpMethod, Request, Response};
+    use rjango_core::Response;
 
     #[test]
     fn test_conditional_get_sets_etag() {

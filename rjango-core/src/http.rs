@@ -288,6 +288,7 @@ pub struct Response {
     pub headers: HashMap<String, String>,
     pub body: Vec<u8>,
     pub cookies: Vec<(String, String)>,
+    pub has_template_content: bool,
 }
 
 impl Response {
@@ -299,6 +300,7 @@ impl Response {
             headers,
             body: body.into(),
             cookies: Vec::new(),
+            has_template_content: false,
         }
     }
 
@@ -375,6 +377,11 @@ impl Response {
 
     pub fn body_str(&self) -> std::borrow::Cow<'_, str> {
         String::from_utf8_lossy(&self.body)
+    }
+
+    /// Returns true if this response contains template content.
+    pub fn has_template(&self) -> bool {
+        self.has_template_content
     }
 }
 

@@ -10,14 +10,6 @@ pub trait View: Send + Sync {
     fn call(&self, request: Request) -> Response;
 }
 
-/// ── Helpers ──────────────────────────────────────────────────────────
-
-/// Resolve template name from kwargs or use a default.
-#[allow(dead_code)]
-fn resolve_template(kwargs: &HashMap<String, String>, default: &str) -> String {
-    kwargs.get("template_name").cloned().unwrap_or_else(|| default.to_string())
-}
-
 /// ── TemplateView ──────────────────────────────────────────────────────
 /// Renders a named template.
 pub struct TemplateView {

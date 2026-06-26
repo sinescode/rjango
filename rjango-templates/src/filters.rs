@@ -60,6 +60,9 @@ pub fn builtin_filters() -> Vec<(&'static str, FilterFn)> {
         ("iriencode", |v, _| iriencode(v)),
         ("json_script", |v, args| json_script(v, args)),
         ("safeseq", |v, _| safeseq(v)),
+        ("force_escape", |v, _| force_escape(v)),
+        ("get_digit", |v, args| get_digit(v, args)),
+        ("urlizetrunc", |v, args| urlizetrunc(v, args)),
     ]
 }
 
@@ -647,6 +650,52 @@ fn safeseq(v: &Value) -> Value {
     v.clone()
 }
 
+/// Force-escape HTML — always escapes even if value is marked safe.
+fn force_escape(v: &Value) -> Value {
+    let s = v.as_str().unwrap_or("");
+    Value::String(
+        s.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&#x27;"),
+    )
+}
+
+/// Get the nth digit from a number (1-indexed from right).
+/// E.g., {{ 12345|get_digit:"2" }} → "4"
+fn get_digit(v: &Value, args: &[&str]) -> Value {
+    let n = v.as_f64().map(|f| f.abs() as u64).unwrap_or(0);
+    let pos: usize = args.first().and_then(|a| a.parse().ok()).unwrap_or(0);
+    if pos == 0 || n == 0 {
+        return Value::Number(serde_json::Number::from(0u64));
+    }
+    let digits = n.to_string();
+    if pos > digits.len() {
+        return Value::Number(serde_json::Number::from(0u64));
+    }
+    let ch = digits.chars().rev().nth(pos - 1).unwrap_or('0');
+    Value::Number(serde_json::Number::from(ch.to_digit(10).unwrap_or(0)))
+}
+
+/// URLize with truncated display text.
+/// E.g., {{ "https://example.com/long/path"|urlizetrunc:"15" }}
+fn urlizetrunc(v: &Value, args: &[&str]) -> Value {
+    let s = v.as_str().unwrap_or("");
+    let truncate_len: usize = args.first().and_then(|a| a.parse().ok()).unwrap_or(30);
+    let re = regex::Regex::new(r"(https?://[^\s<]+)").unwrap();
+    let result = re.replace_all(s, |caps: &regex::Captures| {
+        let url = &caps[1];
+        let truncated: String = if url.chars().count() > truncate_len {
+            format!("{}...", url.chars().take(truncate_len).collect::<String>())
+        } else {
+            url.to_string()
+        };
+        format!(r##"<a href="{}">{}</a>"##, url, truncated)
+    });
+    Value::String(result.to_string())
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────
 #[cfg(test)]
 mod tests {
@@ -971,5 +1020,93 @@ mod tests {
     fn test_safeseq_passthrough() {
         let arr = json!(["a", "b"]);
         assert_eq!(safeseq(&arr), arr);
+    }
+
+    #[test]
+    fn test_force_escape() {
+        assert_eq!(force_escape(&json!("<b>bold</b>")), json!("&lt;b&gt;bold&lt;/b&gt;"));
+    }
+
+    #[test]
+    fn test_force_escape_ampersand() {
+        assert_eq!(force_escape(&json!("a&b")), json!("a&amp;b"));
+    }
+
+    #[test]
+    fn test_force_escape_quotes() {
+        assert_eq!(force_escape(&json!("\"hello\"")), json!("&quot;hello&quot;"));
+    }
+
+    #[test]
+    fn test_force_escape_multiple() {
+        assert_eq!(force_escape(&json!("<a href='x'>")), json!("&lt;a href=&#x27;x&#x27;&gt;"));
+    }
+
+    #[test]
+    fn test_get_digit_basic() {
+        assert_eq!(get_digit(&json!(12345), &["2"]), json!(4));
+    }
+
+    #[test]
+    fn test_get_digit_first() {
+        assert_eq!(get_digit(&json!(12345), &["1"]), json!(5));
+    }
+
+    #[test]
+    fn test_get_digit_last() {
+        assert_eq!(get_digit(&json!(12345), &["5"]), json!(1));
+    }
+
+    #[test]
+    fn test_get_digit_out_of_range() {
+        assert_eq!(get_digit(&json!(123), &["10"]), json!(0));
+    }
+
+    #[test]
+    fn test_get_digit_zero_pos() {
+        assert_eq!(get_digit(&json!(123), &["0"]), json!(0));
+    }
+
+    #[test]
+    fn test_get_digit_zero_value() {
+        assert_eq!(get_digit(&json!(0), &["1"]), json!(0));
+    }
+
+    #[test]
+    fn test_get_digit_negative_number() {
+        // Negative: use absolute value
+        assert_eq!(get_digit(&json!(-12345), &["2"]), json!(4));
+    }
+
+    #[test]
+    fn test_urlizetrunc_basic() {
+        let result = urlizetrunc(&json!("Visit https://example.com"), &["20"]);
+        let s = result.as_str().unwrap();
+        assert!(s.contains(r##"<a href="https://example.com">"##));
+        assert!(s.contains("https://example.com"));
+    }
+
+    #[test]
+    fn test_urlizetrunc_truncated() {
+        let long = "https://example.com/very/long/path/that/should/be/truncated";
+        let result = urlizetrunc(&json!(long), &["20"]);
+        let s = result.as_str().unwrap();
+        assert!(s.contains("..."));
+        // The display text should be truncated, but the full URL wrapper adds HTML length
+        assert!(s.contains(long));  // The href has the full URL
+    }
+
+    #[test]
+    fn test_urlizetrunc_no_truncate_short() {
+        let short = "https://goo.gl/abc";
+        let result = urlizetrunc(&json!(short), &["30"]);
+        let s = result.as_str().unwrap();
+        assert!(!s.contains("..."));
+    }
+
+    #[test]
+    fn test_urlizetrunc_no_urls() {
+        let result = urlizetrunc(&json!("plain text"), &["10"]);
+        assert_eq!(result, json!("plain text"));
     }
 }

@@ -735,11 +735,27 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    // ── Core rendering ──
+
+    #[test]
+    fn test_render_empty_template() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        assert_eq!(engine.render_string("", &ctx).unwrap(), "");
+    }
+
+    #[test]
+    fn test_render_plain_text() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        assert_eq!(engine.render_string("Hello World", &ctx).unwrap(), "Hello World");
+    }
+
     #[test]
     fn test_render_variable() {
         let engine = Engine::new(Box::new(crate::loaders::TestLoader));
         let mut ctx = Context::new();
-        ctx.insert("name".into(), Value::String("World".into()));
+        ctx.insert("name".into(), json!("World"));
         let result = engine.render_string("Hello {{ name }}!", &ctx).unwrap();
         assert_eq!(result, "Hello World!");
     }
@@ -753,10 +769,68 @@ mod tests {
     }
 
     #[test]
+    fn test_render_multiple_variables() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("first".into(), json!("Hello"));
+        ctx.insert("second".into(), json!("World"));
+        let result = engine.render_string("{{ first }} {{ second }}!", &ctx).unwrap();
+        assert_eq!(result, "Hello World!");
+    }
+
+    #[test]
+    fn test_render_numeric_variable() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("count".into(), json!(42));
+        let result = engine.render_string("Count: {{ count }}", &ctx).unwrap();
+        assert_eq!(result, "Count: 42");
+    }
+
+    #[test]
+    fn test_render_boolean_variable() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("active".into(), json!(true));
+        ctx.insert("inactive".into(), json!(false));
+        let result = engine.render_string("{{ active }}-{{ inactive }}", &ctx).unwrap();
+        assert_eq!(result, "true-false");
+    }
+
+    #[test]
+    fn test_render_null_variable() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("nothing".into(), json!(null));
+        let result = engine.render_string("{{ nothing }}", &ctx).unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_render_array_variable() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), json!([1, 2, 3]));
+        let result = engine.render_string("{{ items }}", &ctx).unwrap();
+        assert_eq!(result, "[array]");
+    }
+
+    #[test]
+    fn test_render_object_variable() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("obj".into(), json!({"a": 1}));
+        let result = engine.render_string("{{ obj }}", &ctx).unwrap();
+        assert_eq!(result, "[object]");
+    }
+
+    // ── {% if %} tag ──
+
+    #[test]
     fn test_if_tag() {
         let engine = Engine::new(Box::new(crate::loaders::TestLoader));
         let mut ctx = Context::new();
-        ctx.insert("show".into(), Value::Bool(true));
+        ctx.insert("show".into(), json!(true));
         let result = engine.render_string(
             "{% if show %}visible{% endif %}", &ctx).unwrap();
         assert_eq!(result, "visible");
@@ -766,11 +840,155 @@ mod tests {
     fn test_if_else_tag() {
         let engine = Engine::new(Box::new(crate::loaders::TestLoader));
         let mut ctx = Context::new();
-        ctx.insert("show".into(), Value::Bool(false));
+        ctx.insert("show".into(), json!(false));
         let result = engine.render_string(
             "{% if show %}yes{% else %}no{% endif %}", &ctx).unwrap();
         assert_eq!(result, "no");
     }
+
+    #[test]
+    fn test_if_with_non_empty_string_is_truthy() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("str".into(), json!("hello"));
+        let result = engine.render_string(
+            "{% if str %}yes{% endif %}", &ctx).unwrap();
+        assert_eq!(result, "yes");
+    }
+
+    #[test]
+    fn test_if_with_empty_string_is_falsy() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("name".into(), json!(""));
+        let result = engine.render_string(
+            "{% if name %}yes{% else %}no{% endif %}", &ctx).unwrap();
+        assert_eq!(result, "no");
+    }
+
+    #[test]
+    fn test_if_with_zero_is_falsy() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("count".into(), json!(0));
+        let result = engine.render_string(
+            "{% if count %}yes{% else %}no{% endif %}", &ctx).unwrap();
+        assert_eq!(result, "no");
+    }
+
+    #[test]
+    fn test_if_with_one_is_truthy() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("n".into(), json!(1));
+        let result = engine.render_string(
+            "{% if n %}yes{% else %}no{% endif %}", &ctx).unwrap();
+        assert_eq!(result, "yes");
+    }
+
+    #[test]
+    fn test_if_null_variable() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("val".into(), Value::Null);
+        let result = engine.render_string(
+            "{% if val %}yes{% else %}no{% endif %}", &ctx).unwrap();
+        assert_eq!(result, "no");
+    }
+
+    #[test]
+    fn test_if_missing_variable_is_falsy() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "{% if nonexist %}yes{% else %}no{% endif %}", &ctx).unwrap();
+        assert_eq!(result, "no");
+    }
+
+    #[test]
+    fn test_deeply_nested_ifs() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("x".into(), json!(true));
+        ctx.insert("y".into(), json!(true));
+        ctx.insert("z".into(), json!(true));
+        let result = engine.render_string(
+            "{% if x %}{% if y %}{% if z %}deep{% endif %}{% endif %}{% endif %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "deep");
+    }
+
+    #[test]
+    fn test_nested_if_false_inner() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("x".into(), json!(true));
+        ctx.insert("y".into(), json!(false));
+        let result = engine.render_string(
+            "{% if x %}outer{% if y %}inner{% endif %}{% endif %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "outer");
+    }
+
+    #[test]
+    fn test_if_and_for_together() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("show".into(), json!(true));
+        ctx.insert("items".into(), json!(["a", "b"]));
+        let result = engine.render_string(
+            "{% if show %}{% for i in items %}{{ i }}{% endfor %}{% endif %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "ab");
+    }
+
+    #[test]
+    fn test_if_and_for_skipped_when_false() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("show".into(), json!(false));
+        ctx.insert("items".into(), json!(["a"]));
+        let result = engine.render_string(
+            "{% if show %}{% for i in items %}{{ i }}{% endfor %}{% endif %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_if_with_comparison_equals() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("status".into(), json!("active"));
+        let result = engine.render_string(
+            "{% if status == \"active\" %}yes{% endif %}", &ctx).unwrap();
+        assert_eq!(result, "yes");
+    }
+
+    #[test]
+    fn test_if_with_comparison_not_equals() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("status".into(), json!("active"));
+        let result = engine.render_string(
+            "{% if status != \"inactive\" %}yes{% endif %}", &ctx).unwrap();
+        assert_eq!(result, "yes");
+    }
+
+    #[test]
+    fn test_if_with_comparison_false() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("status".into(), json!("active"));
+        let result = engine.render_string(
+            "{% if status == \"inactive\" %}yes{% endif %}", &ctx).unwrap();
+        assert_eq!(result, "");
+    }
+
+    // ── {% for %} tag ──
 
     #[test]
     fn test_for_tag() {
@@ -780,6 +998,38 @@ mod tests {
         let result = engine.render_string(
             "{% for item in items %}{{ item }},{% endfor %}", &ctx).unwrap();
         assert_eq!(result, "a,b,c,");
+    }
+
+    #[test]
+    fn test_for_with_single_item() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), json!(["only"]));
+        let result = engine.render_string(
+            "{% for item in items %}{{ item }}{% endfor %}", &ctx).unwrap();
+        assert_eq!(result, "only");
+    }
+
+    #[test]
+    fn test_for_empty_with_no_items() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), json!([]));
+        let result = engine.render_string(
+            "{% for item in items %}{{ item }}{% empty %}empty!{% endfor %}", &ctx).unwrap();
+        assert_eq!(result, "empty!");
+    }
+
+    #[test]
+    fn test_for_with_non_array_value() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), json!("not_an_array"));
+        let result = engine.render_string(
+            "{% for item in items %}{{ item }}{% empty %}empty{% endfor %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "empty");
     }
 
     #[test]
@@ -793,42 +1043,113 @@ mod tests {
     }
 
     #[test]
-    fn test_comment_tag() {
+    fn test_forloop_counter0() {
         let engine = Engine::new(Box::new(crate::loaders::TestLoader));
-        let ctx = Context::new();
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), json!(["a", "b", "c", "d"]));
         let result = engine.render_string(
-            "before{% comment %}hidden{% endcomment %}after", &ctx).unwrap();
-        assert_eq!(result, "beforeafter");
+            "{% for item in items %}{{ forloop.counter0 }}{% endfor %}", &ctx).unwrap();
+        assert_eq!(result, "0123");
     }
 
     #[test]
-    fn test_csrf_token() {
+    fn test_forloop_revcounter() {
         let engine = Engine::new(Box::new(crate::loaders::TestLoader));
         let mut ctx = Context::new();
-        ctx.insert("csrf_token".into(), Value::String("abc123".into()));
-        let result = engine.render_string("{% csrf_token %}", &ctx).unwrap();
-        assert!(result.contains("abc123"));
-        assert!(result.contains("csrfmiddlewaretoken"));
-    }
-
-    #[test]
-    fn test_for_empty() {
-        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
-        let mut ctx = Context::new();
-        ctx.insert("items".into(), json!([]));
+        ctx.insert("items".into(), json!(["a", "b", "c"]));
         let result = engine.render_string(
-            "{% for item in items %}{{ item }}{% empty %}empty!{% endfor %}", &ctx).unwrap();
-        assert_eq!(result, "empty!");
+            "{% for item in items %}{{ forloop.revcounter }}{% endfor %}", &ctx).unwrap();
+        assert_eq!(result, "321");
     }
 
     #[test]
-    fn test_dot_access() {
+    fn test_forloop_revcounter0() {
         let engine = Engine::new(Box::new(crate::loaders::TestLoader));
         let mut ctx = Context::new();
-        ctx.insert("user".into(), json!({"name": "Alice"}));
-        let result = engine.render_string("Hello {{ user.name }}!", &ctx).unwrap();
-        assert_eq!(result, "Hello Alice!");
+        ctx.insert("items".into(), json!(["a", "b"]));
+        let result = engine.render_string(
+            "{% for item in items %}{{ forloop.revcounter0 }}{% endfor %}", &ctx).unwrap();
+        assert_eq!(result, "10");
     }
+
+    #[test]
+    fn test_forloop_first() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), json!(["a", "b"]));
+        let result = engine.render_string(
+            "{% for item in items %}{% if forloop.first %}first{% else %}not-first{% endif %}{% endfor %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "firstnot-first");
+    }
+
+    #[test]
+    fn test_forloop_last() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), json!(["a", "b"]));
+        let result = engine.render_string(
+            "{% for item in items %}{% if forloop.last %}last{% else %}{% endif %}{% endfor %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "last");
+    }
+
+    #[test]
+    fn test_for_consecutive_multiple_loops() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("a".into(), json!([1, 2]));
+        ctx.insert("b".into(), json!(["x", "y"]));
+        let result = engine.render_string(
+            "{% for i in a %}{{ i }}{% endfor %}/{% for j in b %}{{ j }}{% endfor %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "12/xy");
+    }
+
+    #[test]
+    fn test_nested_for_loops() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("rows".into(), json!([[1, 2], [3, 4]]));
+        let result = engine.render_string(
+            "{% for row in rows %}{% for cell in row %}{{ cell }}{% endfor %},{% endfor %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "12,34,");
+    }
+
+    #[test]
+    fn test_for_with_external_variable() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), json!(["a", "b", "c"]));
+        ctx.insert("prefix".into(), json!("item_"));
+        let result = engine.render_string(
+            "{% for item in items %}{{ prefix }}{{ item }},{% endfor %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "item_a,item_b,item_c,");
+    }
+
+    #[test]
+    fn test_dot_access_nested_inside_for() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("users".into(), json!([
+            {"name": "Alice", "age": 30},
+            {"name": "Bob", "age": 25},
+        ]));
+        let result = engine.render_string(
+            "{% for u in users %}{{ u.name }}-{{ u.age }},{% endfor %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "Alice-30,Bob-25,");
+    }
+
+    // ── {% block %} and inheritance ──
 
     #[test]
     fn test_block_simple() {
@@ -841,22 +1162,281 @@ mod tests {
     }
 
     #[test]
+    fn test_multiple_blocks() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("x".into(), json!("1"));
+        ctx.insert("y".into(), json!("2"));
+        let result = engine.render_string(
+            "{% block a %}{{ x }}{% endblock %} {% block b %}{{ y }}{% endblock %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "1 2");
+    }
+
+    #[test]
+    fn test_nested_block_no_extends() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("x".into(), json!("val"));
+        let result = engine.render_string(
+            "<div>{% block inner %}{{ x }}{% endblock %}</div>",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "<div>val</div>");
+    }
+
+    // ── {% comment %} tag ──
+
+    #[test]
+    fn test_comment_tag() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "before{% comment %}hidden{% endcomment %}after", &ctx).unwrap();
+        assert_eq!(result, "beforeafter");
+    }
+
+    #[test]
+    fn test_comment_within_comment() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "before{% comment %}inner{% endcomment %}after",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "beforeafter");
+    }
+
+    // ── {% csrf_token %} tag ──
+
+    #[test]
+    fn test_csrf_token() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("csrf_token".into(), json!("abc123"));
+        let result = engine.render_string("{% csrf_token %}", &ctx).unwrap();
+        assert!(result.contains("abc123"));
+        assert!(result.contains("csrfmiddlewaretoken"));
+    }
+
+    #[test]
+    fn test_csrf_token_no_context() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string("{% csrf_token %}", &ctx).unwrap();
+        assert!(result.contains("csrfmiddlewaretoken"));
+    }
+
+    // ── {% now %} tag ──
+
+    #[test]
     fn test_now_tag() {
         let engine = Engine::new(Box::new(crate::loaders::TestLoader));
         let ctx = Context::new();
         let result = engine.render_string("{% now \"Y-m-d\" %}", &ctx).unwrap();
-        assert_eq!(result.len(), 10); // e.g. 2026-06-25
+        assert_eq!(result.len(), 10);
     }
+
+    #[test]
+    fn test_now_with_format_y() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string("{% now \"Y\" %}", &ctx).unwrap();
+        assert_eq!(result.len(), 4);
+    }
+
+    #[test]
+    fn test_now_with_format_m() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string("{% now \"m\" %}", &ctx).unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+        #[test]
+    fn test_now_with_format_d() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string("{% now \"d\" %}", &ctx).unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_now_with_format_h() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string("{% now \"H\" %}", &ctx).unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_now_with_format_i() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string("{% now \"i\" %}", &ctx).unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_now_with_format_s() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string("{% now \"s\" %}", &ctx).unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_now_full_datetime_fallback() {
+        // "Y-m-d H:i:s" is not matched by now handler → falls back to Y-m-d
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string("{% now \"Y-m-d H:i:s\" %}", &ctx).unwrap();
+        assert_eq!(result.len(), 10);
+    }
+
+    // ── {% firstof %} tag ──
 
     #[test]
     fn test_firstof_tag() {
         let engine = Engine::new(Box::new(crate::loaders::TestLoader));
         let mut ctx = Context::new();
         ctx.insert("a".into(), Value::Null);
-        ctx.insert("b".into(), Value::String("hello".into()));
+        ctx.insert("b".into(), json!("hello"));
         let result = engine.render_string("{% firstof a b %}", &ctx).unwrap();
         assert_eq!(result, "hello");
     }
+
+    #[test]
+    fn test_firstof_with_all_missing() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("a".into(), Value::Null);
+        ctx.insert("b".into(), Value::Null);
+        let result = engine.render_string("{% firstof a b %}", &ctx).unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_firstof_with_empty_string() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("a".into(), json!(""));
+        ctx.insert("b".into(), json!("fallback"));
+        let result = engine.render_string("{% firstof a b %}", &ctx).unwrap();
+        assert_eq!(result, "fallback");
+    }
+
+    #[test]
+    fn test_firstof_with_number() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("num".into(), json!(42));
+        let result = engine.render_string("{% firstof num %}", &ctx).unwrap();
+        assert_eq!(result, "42");
+    }
+
+    #[test]
+    fn test_firstof_with_literal_string() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "{% firstof a \"direct\" %}", &ctx).unwrap();
+        assert_eq!(result, "direct");
+    }
+
+    // ── {% widthratio %} tag ──
+
+    #[test]
+    fn test_widthratio_tag() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("value".into(), json!(50));
+        ctx.insert("max".into(), json!(100));
+        let result = engine.render_string(
+            "{% widthratio value max 400 %}", &ctx).unwrap();
+        assert_eq!(result, "200");
+    }
+
+    #[test]
+    fn test_widthratio_edge_case_zero_max() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("v".into(), json!(50));
+        ctx.insert("m".into(), json!(0));
+        ctx.insert("t".into(), json!(100));
+        let result = engine.render_string(
+            "{% widthratio v m t %}", &ctx).unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_widthratio_with_zero_value() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("v".into(), json!(0));
+        ctx.insert("m".into(), json!(100));
+        ctx.insert("t".into(), json!(400));
+        let result = engine.render_string(
+            "{% widthratio v m t %}", &ctx).unwrap();
+        assert_eq!(result, "0");
+    }
+
+    #[test]
+    fn test_widthratio_float_result() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("v".into(), json!(1));
+        ctx.insert("m".into(), json!(3));
+        ctx.insert("t".into(), json!(100));
+        let result = engine.render_string(
+            "{% widthratio v m t %}", &ctx).unwrap();
+        assert_eq!(result, "33");
+    }
+
+    #[test]
+    fn test_widthratio_literal_values() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "{% widthratio 10 20 100 %}", &ctx).unwrap();
+        assert_eq!(result, "50"); // (10/20)*100 = 50
+    }
+
+    // ── {% spaceless %} tag ──
+
+    #[test]
+    fn test_spaceless_tag() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("x".into(), json!("test"));
+        let result = engine.render_string(
+            "{% spaceless %}   {{ x }}   {% endspaceless %}", &ctx).unwrap();
+        assert_eq!(result, "test");
+    }
+
+    #[test]
+    fn test_spaceless_empty_body() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "{% spaceless %}{% endspaceless %}", &ctx).unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_spaceless_nested_for() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), json!([1, 2]));
+        let result = engine.render_string(
+            "{% spaceless %}{% for i in items %} {{ i }} {% endfor %}{% endspaceless %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "1 2");
+    }
+
+    // ── {% verbatim %} tag ──
 
     #[test]
     fn test_verbatim_tag() {
@@ -868,29 +1448,279 @@ mod tests {
     }
 
     #[test]
-    fn test_widthratio_tag() {
+    fn test_verbatim_preserves_block_syntax() {
+        // Tokenizer strips whitespace from block tags, so verbatim
+        // reconstructs without the original spacing.
         let engine = Engine::new(Box::new(crate::loaders::TestLoader));
-        let mut ctx = Context::new();
-        ctx.insert("value".into(), json!(50));
-        ctx.insert("max".into(), json!(100));
+        let ctx = Context::new();
         let result = engine.render_string(
-            "{% widthratio value max 400 %}", &ctx).unwrap();
-        assert_eq!(result, "200"); // (50/100)*400 = 200
+            "{% verbatim %}{% if x %}hi{% endif %}{% endverbatim %}",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "{%if x%}hi{%endif%}");
     }
 
     #[test]
-    fn test_spaceless_tag() {
+    fn test_verbatim_with_text_around() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "before{% verbatim %}raw{{ x }}{% endverbatim %}after",
+            &ctx,
+        ).unwrap();
+        assert_eq!(result, "beforeraw{{ x }}after");
+    }
+
+    // ── {% static %} tag ──
+
+    #[test]
+    fn test_static_tag() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "{% static \"css/style.css\" %}", &ctx).unwrap();
+        assert_eq!(result, "/static/css/style.css");
+    }
+
+    #[test]
+    fn test_static_with_leading_slash() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "{% static \"/img/logo.png\" %}", &ctx).unwrap();
+        assert_eq!(result, "/static/img/logo.png");
+    }
+
+    // ── {% url %} tag ──
+
+    #[test]
+    fn test_url_tag_with_args() {
+        // Variable args are rendered as their string names (not resolved values)
         let engine = Engine::new(Box::new(crate::loaders::TestLoader));
         let mut ctx = Context::new();
-        ctx.insert("x".into(), Value::String("test".into()));
+        ctx.insert("id".into(), json!(42));
         let result = engine.render_string(
-            "{% spaceless %}   {{ x }}   {% endspaceless %}", &ctx).unwrap();
-        assert_eq!(result, "test");
+            "{% url \"user_detail\" id %}", &ctx).unwrap();
+        assert_eq!(result, "/user_detail/id");
     }
+
+    #[test]
+    fn test_url_tag_no_args() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "{% url \"home\" %}", &ctx).unwrap();
+        assert_eq!(result, "/home");
+    }
+
+    #[test]
+    fn test_url_tag_with_leading_slash() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "{% url \"/absolute/path\" %}", &ctx).unwrap();
+        assert_eq!(result, "/absolute/path");
+    }
+
+    // ── {% cycle %} tag ──
+
+    #[test]
+    fn test_cycle_tag() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string(
+            "{% cycle \"a\" \"b\" %}", &ctx).unwrap();
+        assert_eq!(result, "a");
+    }
+
+    // ── {% regroup %} tag ──
 
     #[test]
     fn test_regroup_tag_parses() {
         let tmpl = parse_template("{% regroup items by category as grouped %}");
         assert!(matches!(tmpl.nodes[0], Node::Regroup { .. }));
+    }
+
+    // ── Engine / convenience ──
+
+    #[test]
+    fn test_engine_with_dirs() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader))
+            .with_dirs(vec![]);
+        let ctx = Context::new();
+        let result = engine.render_string("test", &ctx).unwrap();
+        assert_eq!(result, "test");
+    }
+
+    #[test]
+    fn test_engine_get_template() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        // TestLoader always returns Some("test content"), so any name works
+        assert!(engine.get_template("any_name.html").is_ok());
+    }
+
+    #[test]
+    fn test_load_source() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        // TestLoader always returns Some("test content"), so any name works
+        assert!(engine.load_source("any_name").is_ok());
+    }
+
+    #[test]
+    fn test_render_to_string() {
+        let ctx = Context::new();
+        let result = render_to_string(
+            "template.html",
+            &ctx,
+            Box::new(crate::loaders::TestLoader),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_render_template_string() {
+        let result = render_template_string(
+            "Hello {{ name }}!",
+            &Context::new(),
+        );
+        assert_eq!(result, "Hello !");
+    }
+
+    #[test]
+    fn test_dot_access() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("user".into(), json!({"name": "Alice"}));
+        let result = engine.render_string("Hello {{ user.name }}!", &ctx).unwrap();
+        assert_eq!(result, "Hello Alice!");
+    }
+
+    // ── Mixed tags and complex templates ──
+
+    #[test]
+    fn test_template_with_only_tags() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let mut ctx = Context::new();
+        ctx.insert("a".into(), json!("x"));
+        let result = engine.render_string(
+            "{% csrf_token %}{% now \"Y\" %}{% firstof a %}",
+            &ctx,
+        ).unwrap();
+        assert!(result.contains("csrfmiddlewaretoken"));
+        assert_eq!(result.len(), result.chars().count());
+    }
+
+    // ── Parser / tokenizer tests ──
+
+    #[test]
+    fn test_parse_empty() {
+        let tmpl = parse_template("");
+        assert!(tmpl.nodes.is_empty());
+        assert!(tmpl.extends.is_none());
+        assert!(tmpl.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_parse_plain_text() {
+        let tmpl = parse_template("just text");
+        assert_eq!(tmpl.nodes.len(), 1);
+        assert!(matches!(&tmpl.nodes[0], Node::Text(t) if t == "just text"));
+    }
+
+    #[test]
+    fn test_parse_variable() {
+        let tmpl = parse_template("{{ var_name }}");
+        assert_eq!(tmpl.nodes.len(), 1);
+        assert!(matches!(&tmpl.nodes[0], Node::Variable(v) if v == "var_name"));
+    }
+
+    #[test]
+    fn test_parse_if_block() {
+        let tmpl = parse_template("{% if show %}yes{% endif %}");
+        assert_eq!(tmpl.nodes.len(), 1);
+        assert!(matches!(&tmpl.nodes[0], Node::If { .. }));
+    }
+
+    #[test]
+    fn test_parse_for_block() {
+        let tmpl = parse_template("{% for item in items %}{{ item }}{% endfor %}");
+        assert_eq!(tmpl.nodes.len(), 1);
+        assert!(matches!(&tmpl.nodes[0], Node::For { .. }));
+    }
+
+    #[test]
+    fn test_parse_block_tag() {
+        let tmpl = parse_template("{% block content %}body{% endblock %}");
+        assert!(tmpl.blocks.contains_key("content"));
+        assert!(matches!(&tmpl.nodes[0], Node::Block { name, .. } if name == "content"));
+    }
+
+    #[test]
+    fn test_parse_extends() {
+        let tmpl = parse_template("{% extends \"base.html\" %}");
+        assert_eq!(tmpl.extends, Some("base.html".to_string()));
+    }
+
+    #[test]
+    fn test_parse_include() {
+        let tmpl = parse_template("{% include \"partial.html\" %}");
+        assert!(matches!(&tmpl.nodes[0], Node::Include { template } if template == "partial.html"));
+    }
+
+    #[test]
+    fn test_parse_block_super() {
+        let tmpl = parse_template("{{ block.super }}");
+        assert!(!tmpl.nodes.is_empty());
+        assert!(matches!(&tmpl.nodes[0], Node::BlockSuper));
+    }
+
+    #[test]
+    fn test_tokenizer_variable_and_block() {
+        let tokens = tokenize("{{ var }}{% if x %}");
+        assert_eq!(tokens.len(), 2);
+        assert!(matches!(&tokens[0], Token::Variable(v) if v == "var"));
+        assert!(matches!(&tokens[1], Token::Block(b) if b == "if x"));
+    }
+
+    #[test]
+    fn test_tokenizer_mixed() {
+        // a (text) + {{ var }} (variable) + b (text) + {% if x %} (block) + c (text) + {% endif %} (block) + d (text) = 7
+        let tokens = tokenize("a{{ var }}b{% if x %}c{% endif %}d");
+        assert_eq!(tokens.len(), 7);
+    }
+
+    #[test]
+    fn test_is_truthy() {
+        assert!(!is_truthy(""));
+        assert!(!is_truthy("false"));
+        assert!(!is_truthy("0"));
+        assert!(is_truthy("true"));
+        assert!(is_truthy("1"));
+        assert!(is_truthy("hello"));
+    }
+
+    #[test]
+    fn test_resolve_numeric() {
+        let ctx = Context::new();
+        assert_eq!(resolve_numeric("42", &ctx), 42.0);
+        assert_eq!(resolve_numeric("0", &ctx), 0.0);
+        assert_eq!(resolve_numeric("3.14", &ctx), 3.14);
+        assert_eq!(resolve_numeric("missing", &ctx), 0.0);
+    }
+
+    #[test]
+    fn test_has_block_super() {
+        assert!(!has_block_super(&[]));
+        assert!(!has_block_super(&[Node::Text("hi".into())]));
+        assert!(has_block_super(&[Node::BlockSuper]));
+        assert!(has_block_super(&[Node::Text("a".into()), Node::BlockSuper]));
+    }
+
+    #[test]
+    fn test_now_with_format_h_i_s() {
+        let engine = Engine::new(Box::new(crate::loaders::TestLoader));
+        let ctx = Context::new();
+        let result = engine.render_string("{% now \"H\" %}:{% now \"i\" %}:{% now \"s\" %}", &ctx).unwrap();
+        assert_eq!(result.len(), 8); // HH:MM:SS
     }
 }

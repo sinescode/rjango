@@ -18,7 +18,7 @@ impl Middleware for SecurityMiddleware {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rjango_core::{HttpMethod, Request, Response};
+    use rjango_core::Response;
 
     #[test]
     fn test_security_headers() {

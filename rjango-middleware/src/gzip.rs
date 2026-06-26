@@ -20,7 +20,7 @@ impl Middleware for GZipMiddleware {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rjango_core::{HttpMethod, Request, Response};
+    use rjango_core::Response;
 
     #[test]
     fn test_gzip_adds_header() {

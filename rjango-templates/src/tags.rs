@@ -3,6 +3,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
+use chrono::{Utc, Datelike};
 
 /// Global list of template loaders for {% include %}.
 static LOADERS: OnceLock<Mutex<Vec<Box<dyn crate::loaders::TemplateLoader>>>> = OnceLock::new();
@@ -93,6 +94,11 @@ pub fn evaluate_tag(tag_name: &str, args: &[&str], context: &crate::context::Con
         "extends" => handle_extends(args),
         "include" => handle_include(args, context),
         "url" => handle_url(args, context),
+        "now" => handle_now(args, context, body),
+        "spaceless" => handle_spaceless(args, context, body),
+        "widthratio" => handle_widthratio(args, context, body),
+        "with" => handle_with(args, context, body),
+        "regroup" => handle_regroup(args, context, body),
         "csrf_token" => handle_csrf_token(args, context, body),
         "debug" => handle_debug(args, context, body),
         "ifchanged" => handle_ifchanged(args, context, body),
@@ -103,20 +109,41 @@ pub fn evaluate_tag(tag_name: &str, args: &[&str], context: &crate::context::Con
         "partial" => handle_partial(args, context, body),
         "trans" => handle_trans(args, context, body),
         "blocktrans" => handle_blocktrans(args, context, body),
+        "autoescape" => handle_autoescape(args, context, body),
+        "cycle" => handle_cycle(args, context, body),
+        "filter" => handle_filter_tag(args, context, body),
+        "firstof" => handle_firstof(args, context),
+        "verbatim" => handle_verbatim(args, context, body),
+        "static" => handle_static(args, context),
         "comment" => String::new(),
         "empty" => String::new(),
-        "endblock" | "endif" | "endfor" | "endcomment" | "endpartialdef" => String::new(),
+        "endblock" | "endif" | "endfor" | "endcomment" | "endpartialdef" | "endspaceless" | "endwith" | "endautoescape" | "endfilter" | "endverbatim" => String::new(),
         _ => format!("{{% {} {} %}}", tag_name, args.join(" ")),
     }
 }
 
 fn handle_if(args: &[&str], context: &crate::context::Context, body: &str) -> String {
     if args.is_empty() { return String::new(); }
+    
+    // Support dot access in condition (e.g., user.active)
     let var_name = args[0];
-    let truthy = match context.get(var_name) {
-        Some(val) => !val.is_null() && val.as_bool().unwrap_or(true),
+    let parts: Vec<&str> = var_name.split('.').collect();
+    
+    let truthy = match context.get(parts[0]) {
+        Some(val) => {
+            // Navigate dot access
+            let mut current = val;
+            for part in &parts[1..] {
+                current = match current.get(part) {
+                    Some(v) => v,
+                    None => { break; }
+                };
+            }
+            !current.is_null() && current.as_bool().unwrap_or(true)
+        }
         None => false,
     };
+    
     if truthy {
         body.to_string()
     } else {
@@ -128,9 +155,93 @@ fn handle_if(args: &[&str], context: &crate::context::Context, body: &str) -> St
     }
 }
 
-fn handle_for(_args: &[&str], _context: &crate::context::Context, _body: &str) -> String {
-    // Minimal for loop placeholder
-    String::new()
+fn handle_for(args: &[&str], context: &crate::context::Context, body: &str) -> String {
+    // {% for var in list %}...{% empty %}...{% endfor %}
+    // Parse: args = ["x", "in", "items"]
+    if args.len() < 3 || args[1] != "in" {
+        return String::new();
+    }
+    let var_name = args[0];
+    let list_expr = &args[2..];
+    let list_name = list_expr.join(" ");
+
+    // Get the list from context
+    let list_val = context.get(&list_name);
+    let items = match list_val {
+        Some(serde_json::Value::Array(arr)) => arr.clone(),
+        Some(serde_json::Value::String(s)) => {
+            s.chars().map(|c| serde_json::Value::String(c.to_string())).collect()
+        }
+        _ => vec![],
+    };
+
+    // Check for {% empty %} block
+    let body_content: &str;
+    let empty_content: &str;
+    if let Some(empty_pos) = body.find("{% empty %}") {
+        body_content = &body[..empty_pos];
+        empty_content = &body[empty_pos + 11..];
+    } else {
+        body_content = body;
+        empty_content = "";
+    }
+
+    if items.is_empty() {
+        return empty_content.to_string();
+    }
+
+    let mut result = String::new();
+    let total = items.len();
+    for (i, item) in items.iter().enumerate() {
+        // Render the body with the loop variable in a temporary context
+        let mut loop_ctx = context.clone();
+        loop_ctx.insert(var_name.to_string(), item.clone());
+
+        // Add Django-style forloop context variables
+        let mut forloop = serde_json::Map::new();
+        forloop.insert("counter0".into(), serde_json::Number::from(i as u64).into());
+        forloop.insert("counter".into(), serde_json::Number::from((i + 1) as u64).into());
+        forloop.insert("revcounter".into(), serde_json::Number::from((total - i) as u64).into());
+        forloop.insert("revcounter0".into(), serde_json::Number::from((total - i - 1) as u64).into());
+        forloop.insert("first".into(), serde_json::Value::Bool(i == 0));
+        forloop.insert("last".into(), serde_json::Value::Bool(i == total - 1));
+        forloop.insert("parentloop".into(), serde_json::Value::Null); // Nested loop support
+        loop_ctx.insert("forloop".into(), serde_json::Value::Object(forloop));
+
+        // Re-evaluate the body with the new context (simple var substitution)
+        let rendered = render_body(body_content, &loop_ctx);
+        result.push_str(&rendered);
+    }
+    result
+}
+
+/// Simple body rendering: replace {{ var }} with context values.
+/// This is a basic inline renderer used by for/if/with tags.
+fn render_body(body: &str, ctx: &crate::context::Context) -> String {
+    use regex::Regex;
+    let re = Regex::new(r"\{\{\s*([a-zA-Z_.]+)\s*\}\}").unwrap();
+    let result = re.replace_all(body, |caps: &regex::Captures| {
+        let key = &caps[1];
+        // Handle dot access
+        let parts: Vec<&str> = key.split('.').collect();
+        let mut val: Option<serde_json::Value> = None;
+        for (j, part) in parts.iter().enumerate() {
+            if j == 0 {
+                val = ctx.get(part).cloned();
+            } else if let Some(ref inner) = val {
+                val = inner.get(part).cloned();
+            }
+        }
+        match val {
+            Some(serde_json::Value::String(s)) => s,
+            Some(serde_json::Value::Number(n)) => n.to_string(),
+            Some(serde_json::Value::Bool(b)) => b.to_string(),
+            Some(serde_json::Value::Null) => String::new(),
+            Some(other) => other.to_string(),
+            None => format!("{{{{{}}}}}", key),
+        }
+    });
+    result.to_string()
 }
 
 fn handle_block(_args: &[&str], body: &str) -> String {
@@ -323,6 +434,216 @@ fn handle_url(args: &[&str], _context: &crate::context::Context) -> String {
     format!("/{}/", view_name)
 }
 
+/// {% now "format" %} — outputs current date/time formatted.
+/// Supports Django-style format characters:
+///   Y = 4-digit year, y = 2-digit year, m = month, n = month no leading zero
+///   d = day, j = day no leading zero, H = hour (24h), i = minute, s = second
+///   F = full month name, M = abbrev month, D = abbrev day, l = full day
+///   b = abbrev month (lowercase), t = days in month, L = leap year
+fn handle_now(args: &[&str], _context: &crate::context::Context, _body: &str) -> String {
+    let fmt = args.first().copied().unwrap_or("Y-m-d H:i:s");
+    let fmt = fmt.trim_matches('"').trim_matches('\'');
+    let now = Utc::now();
+    format_datetime(now, fmt)
+}
+
+fn format_datetime(dt: chrono::DateTime<Utc>, fmt: &str) -> String {
+    let mut result = String::new();
+    let mut chars = fmt.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            'Y' => result.push_str(&dt.format("%Y").to_string()),
+            'y' => result.push_str(&dt.format("%y").to_string()),
+            'm' => result.push_str(&dt.format("%m").to_string()),
+            'n' => result.push_str(&dt.format("%-m").to_string()),
+            'd' => result.push_str(&dt.format("%d").to_string()),
+            'j' => result.push_str(&dt.format("%-d").to_string()),
+            'H' => result.push_str(&dt.format("%H").to_string()),
+            'i' => result.push_str(&dt.format("%M").to_string()),
+            's' => result.push_str(&dt.format("%S").to_string()),
+            'F' => result.push_str(&dt.format("%B").to_string()),
+            'M' => result.push_str(&dt.format("%b").to_string()),
+            'D' => result.push_str(&dt.format("%a").to_string()),
+            'l' => result.push_str(&dt.format("%A").to_string()),
+            'b' => {
+                let month = dt.format("%b").to_string().to_lowercase();
+                result.push_str(&month);
+            }
+            't' => {
+                let month = dt.month();
+                let days = match month {
+                    4 | 6 | 9 | 11 => 30,
+                    2 => if is_leap_year(dt.year()) { 29 } else { 28 },
+                    _ => 31,
+                };
+                result.push_str(&days.to_string());
+            }
+            'L' => result.push_str(if is_leap_year(dt.year()) { "1" } else { "0" }),
+            '\\' => {
+                // Escaped character
+                if let Some(next) = chars.next() {
+                    result.push(next);
+                }
+            }
+            other => result.push(other),
+        }
+    }
+    result
+}
+
+fn is_leap_year(year: i32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
+/// {% spaceless %}...{% endspaceless %} — removes whitespace between HTML tags.
+/// Matches Django's implementation: replaces `>\s+<` with `><`.
+fn handle_spaceless(_args: &[&str], _context: &crate::context::Context, body: &str) -> String {
+    // Use regex: replace > followed by whitespace followed by < with ><
+    let re = regex::Regex::new(r">\s+<").unwrap();
+    re.replace_all(body, "><").to_string()
+}
+
+/// {% widthratio this max width %} — calculates (this/max)*width as a ratio.
+fn handle_widthratio(args: &[&str], _context: &crate::context::Context, _body: &str) -> String {
+    if args.len() < 3 {
+        return String::new();
+    }
+    let this_val: f64 = args[0].parse().unwrap_or(0.0);
+    let max_val: f64 = args[1].parse().unwrap_or(1.0);
+    let width_val: f64 = args[2].parse().unwrap_or(0.0);
+    if max_val == 0.0 {
+        return String::new();
+    }
+    let ratio = (this_val / max_val) * width_val;
+    format!("{:.0}", ratio)
+}
+
+/// {% with var=value %}...{% endwith %} — sets a variable in context scope.
+/// Simple implementation: just renders the body as-is.
+fn handle_with(args: &[&str], context: &crate::context::Context, body: &str) -> String {
+    // {% with x=5 y=var_name %}...{% endwith %}
+    // Set variables in a local scope for the body
+    let mut scoped = context.clone();
+    for arg in args {
+        if let Some(eq_pos) = arg.find('=') {
+            let key = &arg[..eq_pos];
+            let value_expr = &arg[eq_pos + 1..];
+            // Try context lookup first, then literal
+            let val = context.get(value_expr)
+                .cloned()
+                .or_else(|| value_expr.parse::<i64>().ok().map(|n| serde_json::json!(n)))
+                .or_else(|| value_expr.parse::<f64>().ok().map(|n| serde_json::json!(n)))
+                .unwrap_or_else(|| serde_json::Value::String(value_expr.to_string()));
+            scoped.insert(key.to_string(), val);
+        }
+    }
+    render_body(body, &scoped)
+}
+
+/// {% regroup list by attribute as var %} — groups a list of dicts by an attribute.
+/// Simple implementation: returns a placeholder.
+fn handle_regroup(args: &[&str], _context: &crate::context::Context, _body: &str) -> String {
+    if args.len() < 4 {
+        return String::new();
+    }
+    // returns placeholder — real implementation needs query-engine integration
+    String::new()
+}
+
+/// {% autoescape on %}...{% endautoescape %} — toggles auto-escaping on/off for a block.
+/// In Django: {% autoescape off %}content{% endautoescape %} renders without HTML escaping.
+fn handle_autoescape(args: &[&str], _context: &crate::context::Context, body: &str) -> String {
+    let setting = args.first().copied().unwrap_or("on");
+    match setting {
+        "off" | "false" | "0" => body.to_string(),
+        _ => {
+            // When autoescape is on, escape HTML characters
+            body.replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+                .replace('\'', "&#x27;")
+        }
+    }
+}
+
+/// {% cycle "val1" "val2" ... %} — cycles through values on each call.
+/// Uses a "global" counter per cycle position.
+fn handle_cycle(args: &[&str], _context: &crate::context::Context, _body: &str) -> String {
+    if args.is_empty() {
+        return String::new();
+    }
+    // Strip quotes from each arg
+    let values: Vec<String> = args.iter()
+        .map(|a| a.trim_matches('"').trim_matches('\'').to_string())
+        .collect();
+    
+    // Use a counter stored in a static — simple version
+    static CYCLE_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let idx = CYCLE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst) % values.len();
+    values[idx].clone()
+}
+
+/// {% filter upper %}text{% endfilter %} — applies a filter to the block content.
+fn handle_filter_tag(args: &[&str], _context: &crate::context::Context, body: &str) -> String {
+    let filter_name = args.first().copied().unwrap_or("");
+    if filter_name.is_empty() {
+        return body.to_string();
+    }
+    // Apply the named filter from built-in filters
+    let filters = crate::filters::builtin_filters();
+    for (name, filter_fn) in filters {
+        if name == filter_name {
+            let val = serde_json::Value::String(body.to_string());
+            let result = filter_fn(&val, &[]);
+            return result.as_str().unwrap_or(body).to_string();
+        }
+    }
+    body.to_string()
+}
+
+/// {% firstof var1 var2 "default" %} — outputs the first non-false/non-empty argument.
+fn handle_firstof(args: &[&str], context: &crate::context::Context) -> String {
+    for arg in args {
+        let trimmed = arg.trim_matches('"').trim_matches('\'');
+        // Check if it's a variable reference
+        if let Some(val) = context.get(trimmed) {
+            // Empty string, null, and false are all falsy
+            let is_empty_str = val.as_str().map(|s| s.is_empty()).unwrap_or(false);
+            if !is_empty_str && !val.is_null() && val.as_bool().unwrap_or(true) {
+                if let Some(s) = val.as_str() {
+                    return s.to_string();
+                }
+                return format!("{}", val);
+            }
+        } else if trimmed == arg.trim_matches('"').trim_matches('\'') {
+            // Literal string (already stripped quotes above if present)
+            // Check if it was a quoted literal
+            if arg.starts_with('"') || arg.starts_with('\'') {
+                return trimmed.to_string();
+            }
+        }
+    }
+    // No non-empty value found
+    String::new()
+}
+
+/// {% verbatim %}...{% endverbatim %} — renders content without processing template tags.
+fn handle_verbatim(_args: &[&str], _context: &crate::context::Context, body: &str) -> String {
+    body.to_string()
+}
+
+/// {% static "path/to/file" %} — resolves a static file path.
+/// Simple implementation: returns /static/ prefixed path.
+fn handle_static(args: &[&str], _context: &crate::context::Context) -> String {
+    let path = args.first().copied().unwrap_or("");
+    let path = path.trim_matches('"').trim_matches('\'');
+    if path.is_empty() {
+        return String::new();
+    }
+    format!("/static/{}", path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -383,9 +704,75 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluate_for_returns_empty() {
-        let ctx = Context::new();
+    fn test_evaluate_for_renders_items() {
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), serde_json::json!(["a", "b", "c"]));
         let result = evaluate_tag("for", &["x", "in", "items"], &ctx, "{{ x }}");
+        assert_eq!(result, "abc");
+    }
+
+    #[test]
+    fn test_for_with_empty_list() {
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), serde_json::json!([]));
+        let result = evaluate_tag("for", &["x", "in", "items"], &ctx, "body");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_for_empty_block() {
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), serde_json::json!([]));
+        let body = "body{% empty %}nothing here";
+        let result = evaluate_tag("for", &["x", "in", "items"], &ctx, body);
+        assert_eq!(result, "nothing here");
+    }
+
+    #[test]
+    fn test_forloop_counter() {
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), serde_json::json!([10, 20]));
+        let result = evaluate_tag("for", &["x", "in", "items"], &ctx, "{{ forloop.counter }}");
+        assert_eq!(result, "12");
+    }
+
+    #[test]
+    fn test_forloop_first_last() {
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), serde_json::json!(["a", "b"]));
+        let result = evaluate_tag("for", &["x", "in", "items"], &ctx, "{{ forloop.first }},{{ forloop.last }}|");
+        // First iteration: first=true,last=false ; Second: first=false,last=true
+        assert_eq!(result, "true,false|false,true|");
+    }
+
+    #[test]
+    fn test_forloop_revcounter() {
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), serde_json::json!(["a", "b", "c"]));
+        let result = evaluate_tag("for", &["x", "in", "items"], &ctx, "{{ forloop.revcounter }}");
+        assert_eq!(result, "321");
+    }
+
+    #[test]
+    fn test_for_renders_body_with_var() {
+        let mut ctx = Context::new();
+        ctx.insert("items".into(), serde_json::json!(["x", "y"]));
+        let result = evaluate_tag("for", &["item", "in", "items"], &ctx, "{{ item }},");
+        assert_eq!(result, "x,y,");
+    }
+
+    #[test]
+    fn test_for_with_string_iteration() {
+        let mut ctx = Context::new();
+        ctx.insert("letters".into(), serde_json::json!("abc"));
+        let result = evaluate_tag("for", &["c", "in", "letters"], &ctx, "{{ c }},");
+        assert_eq!(result, "a,b,c,");
+    }
+
+    #[test]
+    fn test_for_no_in_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("for", &["x"], &ctx, "body");
         assert_eq!(result, "");
     }
 
@@ -776,5 +1163,627 @@ mod tests {
         let body = "Hello\nWorld\n";
         let result = evaluate_tag("blocktrans", &[], &ctx, body);
         assert_eq!(result, body);
+    }
+
+    // ── {% now %} tests ──
+
+    #[test]
+    fn test_now_default_format() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &[], &ctx, "");
+        // Default format: Y-m-d H:i:s — should match e.g. "2026-06-26 06:30:45"
+        assert_eq!(result.len(), 19);
+        assert_eq!(result.chars().filter(|&c| c == '-').count(), 2);
+        assert_eq!(result.chars().filter(|&c| c == ':').count(), 2);
+        assert!(result.contains(' '));
+    }
+
+    #[test]
+    fn test_now_format_year() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"Y\""], &ctx, "");
+        let year: i32 = result.parse().unwrap_or(0);
+        assert!(year >= 2025 && year <= 2099);
+    }
+
+    #[test]
+    fn test_now_format_month() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"m\""], &ctx, "");
+        let month: i32 = result.parse().unwrap_or(0);
+        assert!(month >= 1 && month <= 12);
+    }
+
+    #[test]
+    fn test_now_format_day() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"d\""], &ctx, "");
+        let day: i32 = result.parse().unwrap_or(0);
+        assert!(day >= 1 && day <= 31);
+    }
+
+    #[test]
+    fn test_now_format_time() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"H:i:s\""], &ctx, "");
+        assert_eq!(result.len(), 8);
+    }
+
+    #[test]
+    fn test_now_format_hour() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"H\""], &ctx, "");
+        let hour: i32 = result.parse().unwrap_or(0);
+        assert!(hour >= 0 && hour <= 23);
+    }
+
+    #[test]
+    fn test_now_single_quotes() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["'Y'"], &ctx, "");
+        let year: i32 = result.parse().unwrap_or(0);
+        assert!(year >= 2025);
+    }
+
+    #[test]
+    fn test_now_format_month_name() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"F\""], &ctx, "");
+        let months = ["January","February","March","April","May","June",
+                      "July","August","September","October","November","December"];
+        assert!(months.contains(&result.as_str()));
+    }
+
+    #[test]
+    fn test_now_format_abbrev_day() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"D\""], &ctx, "");
+        let days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+        assert!(days.contains(&result.as_str()), "got: {}", result);
+    }
+
+    #[test]
+    fn test_now_format_full_day() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"l\""], &ctx, "");
+        let days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+        assert!(days.contains(&result.as_str()), "got: {}", result);
+    }
+
+    #[test]
+    fn test_now_format_lowercase_month() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"b\""], &ctx, "");
+        assert!(result.chars().all(|c| c.is_lowercase()));
+    }
+
+    #[test]
+    fn test_now_format_two_digit_year() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"y\""], &ctx, "");
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_now_format_month_no_zero() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"n\""], &ctx, "");
+        let month: i32 = result.parse().unwrap_or(0);
+        assert!(month >= 1 && month <= 12);
+    }
+
+    #[test]
+    fn test_now_format_day_no_zero() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"j\""], &ctx, "");
+        let day: i32 = result.parse().unwrap_or(0);
+        assert!(day >= 1 && day <= 31);
+    }
+
+    #[test]
+    fn test_now_format_days_in_month() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"t\""], &ctx, "");
+        let days: i32 = result.parse().unwrap_or(0);
+        assert!(days >= 28 && days <= 31);
+    }
+
+    #[test]
+    fn test_now_format_leap_year() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"L\""], &ctx, "");
+        let val = result.parse::<i32>().unwrap_or(0);
+        assert!(val == 0 || val == 1);
+    }
+
+    #[test]
+    fn test_now_format_escaped_char() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"\\\\Y\""], &ctx, "");
+        // Escaped backslash followed by Y — first char should be backslash
+        assert_eq!(result.chars().next(), Some('\\'));
+    }
+
+    // ── {% spaceless %} tests ──
+
+    #[test]
+    fn test_spaceless_removes_whitespace() {
+        let ctx = Context::new();
+        let body = "<p>\n  <b>Hello</b>\n</p>";
+        let result = evaluate_tag("spaceless", &[], &ctx, body);
+        assert_eq!(result, "<p><b>Hello</b></p>");
+    }
+
+    #[test]
+    fn test_spaceless_preserves_inner_text() {
+        let ctx = Context::new();
+        let body = "<p> hello </p>";
+        let result = evaluate_tag("spaceless", &[], &ctx, body);
+        assert_eq!(result, "<p> hello </p>");
+    }
+
+    #[test]
+    fn test_spaceless_empty_body() {
+        let ctx = Context::new();
+        let result = evaluate_tag("spaceless", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_spaceless_no_html() {
+        let ctx = Context::new();
+        let result = evaluate_tag("spaceless", &[], &ctx, "just text");
+        assert_eq!(result, "just text");
+    }
+
+    #[test]
+    fn test_spaceless_multiple_elements() {
+        let ctx = Context::new();
+        let body = "<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>";
+        let result = evaluate_tag("spaceless", &[], &ctx, body);
+        assert_eq!(result, "<ul><li>a</li><li>b</li></ul>");
+    }
+
+    #[test]
+    fn test_spaceless_whitespace_only() {
+        let ctx = Context::new();
+        // No HTML tags, so no transformation — Django same behavior
+        let result = evaluate_tag("spaceless", &[], &ctx, "   \n  \t  ");
+        assert_eq!(result, "   \n  \t  ");
+    }
+
+    #[test]
+    fn test_endspaceless_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("endspaceless", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    // ── {% widthratio %} tests ──
+
+    #[test]
+    fn test_widthratio_basic() {
+        let ctx = Context::new();
+        let result = evaluate_tag("widthratio", &["10", "100", "200"], &ctx, "");
+        assert_eq!(result, "20");
+    }
+
+    #[test]
+    fn test_widthratio_half() {
+        let ctx = Context::new();
+        let result = evaluate_tag("widthratio", &["50", "100", "400"], &ctx, "");
+        assert_eq!(result, "200");
+    }
+
+    #[test]
+    fn test_widthratio_zero_max() {
+        let ctx = Context::new();
+        let result = evaluate_tag("widthratio", &["10", "0", "100"], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_widthratio_full_width() {
+        let ctx = Context::new();
+        let result = evaluate_tag("widthratio", &["100", "100", "300"], &ctx, "");
+        assert_eq!(result, "300");
+    }
+
+    #[test]
+    fn test_widthratio_insufficient_args() {
+        let ctx = Context::new();
+        let result = evaluate_tag("widthratio", &["10", "100"], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_widthratio_no_args() {
+        let ctx = Context::new();
+        let result = evaluate_tag("widthratio", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_widthratio_small_values() {
+        let ctx = Context::new();
+        let result = evaluate_tag("widthratio", &["1", "3", "9"], &ctx, "");
+        assert_eq!(result, "3");
+    }
+
+    // ── {% with %} tests ──
+
+    #[test]
+    fn test_with_renders_body() {
+        let ctx = Context::new();
+        let result = evaluate_tag("with", &["x=5"], &ctx, "{{ x }}");
+        assert_eq!(result, "5");
+    }
+
+    #[test]
+    fn test_with_empty_body() {
+        let ctx = Context::new();
+        let result = evaluate_tag("with", &["x=5"], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_with_multiple_pairs() {
+        let mut ctx = Context::new();
+        ctx.insert("name".into(), serde_json::json!("world"));
+        let result = evaluate_tag("with", &["x=10", "y=name"], &ctx, "{{ x }}-{{ y }}");
+        assert_eq!(result, "10-world");
+    }
+
+    #[test]
+    fn test_endwith_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("endwith", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    // ── {% regroup %} tests ──
+
+    #[test]
+    fn test_regroup_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("regroup", &["people", "by", "gender", "as", "groups"], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_regroup_insufficient_args() {
+        let ctx = Context::new();
+        let result = evaluate_tag("regroup", &["people"], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_now_format_month_abbrev() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"M\""], &ctx, "");
+        let months = ["Jan","Feb","Mar","Apr","May","Jun",
+                      "Jul","Aug","Sep","Oct","Nov","Dec"];
+        assert!(months.contains(&result.as_str()), "got: {}", result);
+    }
+
+    #[test]
+    fn test_now_format_minute() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"i\""], &ctx, "");
+        let minute: i32 = result.parse().unwrap_or(-1);
+        assert!(minute >= 0 && minute <= 59);
+    }
+
+    #[test]
+    fn test_now_format_second() {
+        let ctx = Context::new();
+        let result = evaluate_tag("now", &["\"s\""], &ctx, "");
+        let second: i32 = result.parse().unwrap_or(-1);
+        assert!(second >= 0 && second <= 59);
+    }
+
+    // ── {% autoescape %} tests ──
+
+    #[test]
+    fn test_autoescape_off_preserves_html() {
+        let ctx = Context::new();
+        let result = evaluate_tag("autoescape", &["off"], &ctx, "<b>bold</b>");
+        assert_eq!(result, "<b>bold</b>");
+    }
+
+    #[test]
+    fn test_autoescape_on_escapes_html() {
+        let ctx = Context::new();
+        let result = evaluate_tag("autoescape", &["on"], &ctx, "<b>bold</b>");
+        assert_eq!(result, "&lt;b&gt;bold&lt;/b&gt;");
+    }
+
+    #[test]
+    fn test_autoescape_default_is_on() {
+        let ctx = Context::new();
+        let result = evaluate_tag("autoescape", &[], &ctx, "<script>alert(1)</script>");
+        assert!(result.contains("&lt;"));
+        assert!(!result.contains("<script>"));
+    }
+
+    #[test]
+    fn test_autoescape_escapes_ampersand() {
+        let ctx = Context::new();
+        let result = evaluate_tag("autoescape", &["on"], &ctx, "A&B");
+        assert_eq!(result, "A&amp;B");
+    }
+
+    #[test]
+    fn test_autoescape_escapes_quotes() {
+        let ctx = Context::new();
+        let result = evaluate_tag("autoescape", &["on"], &ctx, "\"hello\"");
+        assert!(result.contains("&quot;"));
+    }
+
+    #[test]
+    fn test_autoescape_empty_body() {
+        let ctx = Context::new();
+        let result = evaluate_tag("autoescape", &["on"], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_autoescape_off_with_no_html() {
+        let ctx = Context::new();
+        let result = evaluate_tag("autoescape", &["off"], &ctx, "plain text");
+        assert_eq!(result, "plain text");
+    }
+
+    #[test]
+    fn test_autoescape_false_string() {
+        let ctx = Context::new();
+        let result = evaluate_tag("autoescape", &["false"], &ctx, "<p>test</p>");
+        assert_eq!(result, "<p>test</p>");
+    }
+
+    #[test]
+    fn test_autoescape_zero() {
+        let ctx = Context::new();
+        let result = evaluate_tag("autoescape", &["0"], &ctx, "<tag>");
+        assert_eq!(result, "<tag>");
+    }
+
+    #[test]
+    fn test_endautoescape_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("endautoescape", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    // ── {% cycle %} tests ──
+
+    #[test]
+    fn test_cycle_basic() {
+        let ctx = Context::new();
+        let result = evaluate_tag("cycle", &["\"a\"", "\"b\"", "\"c\""], &ctx, "");
+        // Should return first value
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_cycle_no_args() {
+        let ctx = Context::new();
+        let result = evaluate_tag("cycle", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_cycle_single_value() {
+        let ctx = Context::new();
+        let result = evaluate_tag("cycle", &["\"only\""], &ctx, "");
+        assert_eq!(result, "only");
+    }
+
+    #[test]
+    fn test_cycle_ignores_body() {
+        let ctx = Context::new();
+        let result = evaluate_tag("cycle", &["\"x\""], &ctx, "this is ignored");
+        assert_eq!(result, "x");
+    }
+
+    #[test]
+    fn test_cycle_with_single_quotes() {
+        let ctx = Context::new();
+        let result = evaluate_tag("cycle", &["'val'"], &ctx, "");
+        assert_eq!(result, "val");
+    }
+
+    // ── {% filter %} tests ──
+
+    #[test]
+    fn test_filter_upper() {
+        let ctx = Context::new();
+        let result = evaluate_tag("filter", &["upper"], &ctx, "hello");
+        assert_eq!(result, "HELLO");
+    }
+
+    #[test]
+    fn test_filter_lower() {
+        let ctx = Context::new();
+        let result = evaluate_tag("filter", &["lower"], &ctx, "HELLO");
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_filter_title() {
+        let ctx = Context::new();
+        let result = evaluate_tag("filter", &["title"], &ctx, "hello world");
+        assert_eq!(result, "Hello World");
+    }
+
+    #[test]
+    fn test_filter_slugify() {
+        let ctx = Context::new();
+        let result = evaluate_tag("filter", &["slugify"], &ctx, "Hello World");
+        assert_eq!(result, "hello-world");
+    }
+
+    #[test]
+    fn test_filter_escape() {
+        let ctx = Context::new();
+        let result = evaluate_tag("filter", &["escape"], &ctx, "<b>bold</b>");
+        assert!(result.contains("&lt;"));
+    }
+
+    #[test]
+    fn test_filter_empty_name() {
+        let ctx = Context::new();
+        let result = evaluate_tag("filter", &[], &ctx, "hello");
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_filter_unknown_passthrough() {
+        let ctx = Context::new();
+        let result = evaluate_tag("filter", &["nonexistent_filter"], &ctx, "original");
+        assert_eq!(result, "original");
+    }
+
+    #[test]
+    fn test_endfilter_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("endfilter", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    // ── {% firstof %} tests ──
+
+    #[test]
+    fn test_firstof_picks_first_non_empty() {
+        let mut ctx = Context::new();
+        ctx.insert("a".into(), serde_json::Value::String("".into()));
+        ctx.insert("b".into(), serde_json::Value::String("hello".into()));
+        let result = evaluate_tag("firstof", &["a", "b"], &ctx, "");
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_firstof_skips_null() {
+        let mut ctx = Context::new();
+        ctx.insert("x".into(), serde_json::Value::Null);
+        ctx.insert("y".into(), serde_json::Value::Bool(false));
+        ctx.insert("z".into(), serde_json::Value::String("found".into()));
+        let result = evaluate_tag("firstof", &["x", "y", "z"], &ctx, "");
+        assert_eq!(result, "found");
+    }
+
+    #[test]
+    fn test_firstof_all_empty_returns_empty() {
+        let mut ctx = Context::new();
+        ctx.insert("a".into(), serde_json::Value::Null);
+        ctx.insert("b".into(), serde_json::Value::String("".into()));
+        let result = evaluate_tag("firstof", &["a", "b"], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_firstof_no_args_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("firstof", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_firstof_quoted_literal() {
+        let ctx = Context::new();
+        let result = evaluate_tag("firstof", &["\"default\""], &ctx, "");
+        assert_eq!(result, "default");
+    }
+
+    #[test]
+    fn test_firstof_literal_before_var() {
+        let mut ctx = Context::new();
+        ctx.insert("x".into(), serde_json::Value::String("present".into()));
+        let result = evaluate_tag("firstof", &["\"fallback\"", "x"], &ctx, "");
+        assert_eq!(result, "fallback");
+    }
+
+    // ── {% verbatim %} tests ──
+
+    #[test]
+    fn test_verbatim_preserves_template_syntax() {
+        let ctx = Context::new();
+        let body = "{{ not_a_variable }} {% not_a_tag %}";
+        let result = evaluate_tag("verbatim", &[], &ctx, body);
+        assert_eq!(result, body);
+    }
+
+    #[test]
+    fn test_verbatim_empty_body() {
+        let ctx = Context::new();
+        let result = evaluate_tag("verbatim", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_verbatim_preserves_html() {
+        let ctx = Context::new();
+        let body = "<b>bold</b> &amp; <i>italic</i>";
+        let result = evaluate_tag("verbatim", &[], &ctx, body);
+        assert_eq!(result, body);
+    }
+
+    #[test]
+    fn test_verbatim_preserves_newlines() {
+        let ctx = Context::new();
+        let body = "line1\nline2\nline3";
+        let result = evaluate_tag("verbatim", &[], &ctx, body);
+        assert_eq!(result, body);
+    }
+
+    #[test]
+    fn test_endverbatim_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("endverbatim", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    // ── {% static %} tests ──
+
+    #[test]
+    fn test_static_basic() {
+        let ctx = Context::new();
+        let result = evaluate_tag("static", &["\"css/style.css\""], &ctx, "");
+        assert_eq!(result, "/static/css/style.css");
+    }
+
+    #[test]
+    fn test_static_no_args_returns_empty() {
+        let ctx = Context::new();
+        let result = evaluate_tag("static", &[], &ctx, "");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_static_single_quotes() {
+        let ctx = Context::new();
+        let result = evaluate_tag("static", &["'js/app.js'"], &ctx, "");
+        assert_eq!(result, "/static/js/app.js");
+    }
+
+    #[test]
+    fn test_static_with_subdirectory() {
+        let ctx = Context::new();
+        let result = evaluate_tag("static", &["\"images/logo.png\""], &ctx, "");
+        assert_eq!(result, "/static/images/logo.png");
+    }
+
+    #[test]
+    fn test_static_ignores_body() {
+        let ctx = Context::new();
+        let result = evaluate_tag("static", &["\"favicon.ico\""], &ctx, "ignored body");
+        assert_eq!(result, "/static/favicon.ico");
+    }
+
+    #[test]
+    fn test_static_unquoted_arg() {
+        let ctx = Context::new();
+        let result = evaluate_tag("static", &["path"], &ctx, "");
+        assert_eq!(result, "/static/path");
     }
 }

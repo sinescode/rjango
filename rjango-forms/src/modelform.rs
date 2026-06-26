@@ -61,7 +61,7 @@ pub fn modelform_factory(
         });
     }
 
-    Form { fields, data: HashMap::new(), state: crate::FormState::valid(), is_bound: false }
+    Form { fields, data: HashMap::new(), state: crate::FormState::valid(), is_bound: false, cleaned: false }
 }
 
 fn field_type_from_string(s: &str) -> FieldType {

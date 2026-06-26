@@ -15,13 +15,17 @@ pub trait Manager: Send + Sync {
 
 /// Simple model manager implementation (like Django's `objects`).
 pub struct ModelManager {
-    #[allow(dead_code)]
     table: String,
 }
 
 impl ModelManager {
     pub fn new(table: &str) -> Self {
         Self { table: table.to_string() }
+    }
+
+    /// Get the table name for this manager.
+    pub fn table(&self) -> &str {
+        &self.table
     }
 }
 

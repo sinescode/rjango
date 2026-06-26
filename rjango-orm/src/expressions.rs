@@ -51,12 +51,6 @@ impl Q {
         self
     }
 
-    /// Add a child Q object.
-    #[allow(dead_code)]
-    fn add_child(&mut self, child: Q) {
-        self.children.push(QNode::Subquery(Box::new(child)));
-    }
-
     /// Combine with another Q using AND (`&`).
     pub fn and(mut self, other: Q) -> Self {
         if self.connector == QConnector::And {
