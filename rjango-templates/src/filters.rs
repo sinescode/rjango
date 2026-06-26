@@ -53,6 +53,13 @@ pub fn builtin_filters() -> Vec<(&'static str, FilterFn)> {
         ("unordered_list", |v, _| unordered_list(v)),
         ("dictsort", |v, args| dictsort(v, args)),
         ("pprint", |v, _| pprint(v)),
+        ("escapejs", |v, _| escapejs(v)),
+        ("truncatechars_html", |v, args| truncatechars_html(v, args)),
+        ("truncatewords_html", |v, args| truncatewords_html(v, args)),
+        ("wordwrap", |v, args| wordwrap(v, args)),
+        ("iriencode", |v, _| iriencode(v)),
+        ("json_script", |v, args| json_script(v, args)),
+        ("safeseq", |v, _| safeseq(v)),
     ]
 }
 
@@ -530,6 +537,116 @@ fn pprint(v: &Value) -> Value {
     Value::String(format!("{:#}", v))
 }
 
+/// Escape JavaScript string.
+fn escapejs(v: &Value) -> Value {
+    let s = match v {
+        Value::String(s) => s.clone(),
+        _ => return v.clone(),
+    };
+    let escaped = s
+        .replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+        .replace('/', "\\/");
+    Value::String(escaped)
+}
+
+/// Truncate at N chars with HTML tag awareness (simplified: strips tags then truncates).
+/// Strip HTML tags (char-by-char scanner).
+fn strip_html_tags(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut in_tag = false;
+    for c in s.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' if in_tag => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn truncatechars_html(v: &Value, args: &[&str]) -> Value {
+    let s = match v {
+        Value::String(s) => s.clone(),
+        _ => return v.clone(),
+    };
+    let n: usize = args.first().and_then(|a| a.parse().ok()).unwrap_or(10);
+    let stripped = strip_html_tags(&s);
+    if stripped.chars().count() <= n {
+        return Value::String(stripped);
+    }
+    let truncated: String = stripped.chars().take(n).collect();
+    Value::String(format!("{}...", truncated))
+}
+
+/// Truncate at N words with HTML awareness.
+fn truncatewords_html(v: &Value, args: &[&str]) -> Value {
+    let s = match v {
+        Value::String(s) => s.clone(),
+        _ => return v.clone(),
+    };
+    let n: usize = args.first().and_then(|a| a.parse().ok()).unwrap_or(5);
+    let stripped = strip_html_tags(&s);
+    let words: Vec<&str> = stripped.split_whitespace().collect();
+    if words.len() <= n {
+        return Value::String(words.join(" "));
+    }
+    Value::String(format!("{} ...", words[..n].join(" ")))
+}
+
+/// Wordwrap text at N characters.
+fn wordwrap(v: &Value, args: &[&str]) -> Value {
+    let s = match v {
+        Value::String(s) => s.clone(),
+        _ => return v.clone(),
+    };
+    let width: usize = args.first().and_then(|a| a.parse().ok()).unwrap_or(80);
+    let mut result = String::new();
+    let mut line_len = 0;
+    for word in s.split_whitespace() {
+        if line_len + word.len() + 1 > width && line_len > 0 {
+            result.push('\n');
+            line_len = 0;
+        }
+        if line_len > 0 {
+            result.push(' ');
+            line_len += 1;
+        }
+        result.push_str(word);
+        line_len += word.len();
+    }
+    Value::String(result)
+}
+
+/// Encode an IRI (simplified: URL percent-encoding).
+fn iriencode(v: &Value) -> Value {
+    let s = match v {
+        Value::String(s) => s.clone(),
+        _ => return v.clone(),
+    };
+    Value::String(urlencoding::encode(&s).into_owned())
+}
+
+/// Output value as JSON in a <script> tag.
+fn json_script(v: &Value, args: &[&str]) -> Value {
+    let id = args.first().unwrap_or(&"data");
+    let json_str = serde_json::to_string(v).unwrap_or_else(|_| "null".to_string());
+    Value::String(format!(
+        "<script id=\"{}\" type=\"application/json\">{}</script>",
+        id, json_str
+    ))
+}
+
+/// Mark each item in a sequence as safe (simply returns the same array).
+fn safeseq(v: &Value) -> Value {
+    v.clone()
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────
 #[cfg(test)]
 mod tests {
@@ -793,5 +910,66 @@ mod tests {
     #[test]
     fn test_stringformat() {
         assert_eq!(stringformat(&json!("hello"), &["%s world"]), json!("hello world"));
+    }
+
+    #[test]
+    fn test_escapejs() {
+        let result = escapejs(&json!("it's \"fun\"\n"));
+        let s = result.as_str().unwrap();
+        assert!(s.contains("\\'"));
+        assert!(s.contains("\\\""));
+        assert!(s.contains("\\n"));
+    }
+
+    #[test]
+    fn test_truncatechars_html_strips_tags() {
+        let result = truncatechars_html(&json!("<b>Hello</b> <i>World</i>"), &["5"]);
+        assert_eq!(result, json!("Hello..."));
+    }
+
+    #[test]
+    fn test_truncatechars_html_shorter_than_limit() {
+        let result = truncatechars_html(&json!("<b>Hi</b>"), &["10"]);
+        assert_eq!(result, json!("Hi"));
+    }
+
+    #[test]
+    fn test_truncatewords_html() {
+        let result = truncatewords_html(&json!("<p>One two three four five six</p>"), &["3"]);
+        assert_eq!(result, json!("One two three ..."));
+    }
+
+    #[test]
+    fn test_wordwrap() {
+        let result = wordwrap(&json!("this is a long line of text"), &["10"]);
+        let s = result.as_str().unwrap();
+        assert!(s.contains('\n'));
+    }
+
+    #[test]
+    fn test_iriencode() {
+        let result = iriencode(&json!("hello world"));
+        assert!(result.as_str().unwrap().contains("%20"));
+    }
+
+    #[test]
+    fn test_json_script() {
+        let result = json_script(&json!({"key": "value"}), &["mydata"]);
+        let s = result.as_str().unwrap();
+        assert!(s.contains("<script id=\"mydata\""));
+        assert!(s.contains("\"key\":\"value\""));
+        assert!(s.contains("</script>"));
+    }
+
+    #[test]
+    fn test_json_script_default_id() {
+        let result = json_script(&json!("plain"), &[]);
+        assert!(result.as_str().unwrap().contains("id=\"data\""));
+    }
+
+    #[test]
+    fn test_safeseq_passthrough() {
+        let arr = json!(["a", "b"]);
+        assert_eq!(safeseq(&arr), arr);
     }
 }

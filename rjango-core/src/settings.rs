@@ -35,6 +35,28 @@ pub struct Settings {
     pub session_engine: String,
     /// Login URL
     pub login_url: String,
+    /// Login redirect URL
+    pub login_redirect_url: String,
+    /// Media root (MEDIA_ROOT)
+    pub media_root: PathBuf,
+    /// Media URL (MEDIA_URL)
+    pub media_url: String,
+    /// Use i18n
+    pub use_i18n: bool,
+    /// Use l10n
+    pub use_l10n: bool,
+    /// Session cookie name
+    pub session_cookie_name: String,
+    /// CSRF cookie name
+    pub csrf_cookie_name: String,
+    /// Append slash
+    pub append_slash: bool,
+    /// Prepend www
+    pub prepend_www: bool,
+    /// Disallowed user agents
+    pub disallowed_user_agents: Vec<String>,
+    /// Auth user model
+    pub auth_user_model: String,
     /// Raw key-value store for custom settings
     raw: HashMap<String, serde_json::Value>,
     /// File path this was loaded from
@@ -75,6 +97,17 @@ impl Default for Settings {
             csrf_trusted_origins: vec![],
             session_engine: "rjango.contrib.sessions".into(),
             login_url: "/accounts/login/".into(),
+            login_redirect_url: "/accounts/profile/".into(),
+            media_root: PathBuf::from("media"),
+            media_url: "/media/".into(),
+            use_i18n: true,
+            use_l10n: true,
+            session_cookie_name: "sessionid".into(),
+            csrf_cookie_name: "csrftoken".into(),
+            append_slash: true,
+            prepend_www: false,
+            disallowed_user_agents: vec![],
+            auth_user_model: "auth.User".into(),
             raw: HashMap::new(),
             source_path: None,
         }

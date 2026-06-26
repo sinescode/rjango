@@ -1,6 +1,94 @@
 use std::collections::HashMap;
 use crate::fields::Field;
 
+/// Model options (mirrors Django's Meta class on a model).
+#[derive(Debug, Clone, Default)]
+pub struct Options {
+    pub verbose_name: String,
+    pub verbose_name_plural: String,
+    pub unique_together: Vec<String>,
+    pub indexes: Vec<String>,
+    pub constraints: Vec<String>,
+    pub get_latest_by: String,
+    pub permissions: Vec<String>,
+    pub default_permissions: Vec<String>,
+    pub managed: String,
+    pub proxy: String,
+    pub abstract_meta: String,
+    pub app_label: String,
+    pub label: String,
+    pub label_lower: String,
+    pub module_name: String,
+    pub ordering: Vec<String>,
+}
+
+impl Options {
+    pub fn builder() -> OptionsBuilder {
+        OptionsBuilder::default()
+    }
+}
+
+/// Builder for Options.
+#[derive(Debug, Default)]
+pub struct OptionsBuilder {
+    verbose_name: String,
+    verbose_name_plural: String,
+    unique_together: Vec<String>,
+    indexes: Vec<String>,
+    constraints: Vec<String>,
+    get_latest_by: String,
+    permissions: Vec<String>,
+    default_permissions: Vec<String>,
+    managed: String,
+    proxy: String,
+    abstract_meta: String,
+    app_label: String,
+    label: String,
+    label_lower: String,
+    module_name: String,
+    ordering: Vec<String>,
+}
+
+impl OptionsBuilder {
+    pub fn verbose_name(mut self, v: &str) -> Self { self.verbose_name = v.to_string(); self }
+    pub fn verbose_name_plural(mut self, v: &str) -> Self { self.verbose_name_plural = v.to_string(); self }
+    pub fn unique_together(mut self, v: Vec<String>) -> Self { self.unique_together = v; self }
+    pub fn indexes(mut self, v: Vec<String>) -> Self { self.indexes = v; self }
+    pub fn constraints(mut self, v: Vec<String>) -> Self { self.constraints = v; self }
+    pub fn get_latest_by(mut self, v: &str) -> Self { self.get_latest_by = v.to_string(); self }
+    pub fn permissions(mut self, v: Vec<String>) -> Self { self.permissions = v; self }
+    pub fn default_permissions(mut self, v: Vec<String>) -> Self { self.default_permissions = v; self }
+    pub fn managed(mut self, v: &str) -> Self { self.managed = v.to_string(); self }
+    pub fn proxy(mut self, v: &str) -> Self { self.proxy = v.to_string(); self }
+    pub fn abstract_meta(mut self, v: &str) -> Self { self.abstract_meta = v.to_string(); self }
+    pub fn app_label(mut self, v: &str) -> Self { self.app_label = v.to_string(); self }
+    pub fn label(mut self, v: &str) -> Self { self.label = v.to_string(); self }
+    pub fn label_lower(mut self, v: &str) -> Self { self.label_lower = v.to_string(); self }
+    pub fn module_name(mut self, v: &str) -> Self { self.module_name = v.to_string(); self }
+    pub fn ordering(mut self, v: Vec<String>) -> Self { self.ordering = v; self }
+
+    pub fn build(self) -> Options {
+        Options {
+            verbose_name: self.verbose_name,
+            verbose_name_plural: self.verbose_name_plural,
+            unique_together: self.unique_together,
+            indexes: self.indexes,
+            constraints: self.constraints,
+            get_latest_by: self.get_latest_by,
+            permissions: self.permissions,
+            default_permissions: self.default_permissions,
+            managed: self.managed,
+            proxy: self.proxy,
+            abstract_meta: self.abstract_meta,
+            app_label: self.app_label,
+            label: self.label,
+            label_lower: self.label_lower,
+            module_name: self.module_name,
+            ordering: self.ordering,
+        }
+    }
+}
+
 /// Metadata about a model (like Django's _meta).
 #[derive(Debug)]
 pub struct ModelMetadata {
@@ -12,6 +100,32 @@ pub struct ModelMetadata {
     pub ordering: Option<Vec<String>>,
     pub verbose_name: String,
     pub verbose_name_plural: String,
+    pub options: Options,
+}
+
+impl ModelMetadata {
+    /// Validate unique constraints. Returns Ok or list of error messages.
+    pub fn validate_unique(&self, _exclude: &[String]) -> Result<(), Vec<String>> {
+        // Placeholder — actual uniqueness checks require DB query
+        Ok(())
+    }
+
+    /// Run full model validation (field validation + optional unique check).
+    pub fn full_clean(&self, exclude: &[String], validate_unique: bool) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        // Future: iterate fields and run validators
+        if validate_unique {
+            if let Err(unique_errors) = self.validate_unique(exclude) {
+                errors.extend(unique_errors);
+            }
+        }
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
+
+    /// Return the natural key (primary key values as strings).
+    pub fn natural_key(&self) -> Vec<String> {
+        vec![self.pk_field.clone()]
+    }
 }
 
 impl Clone for ModelMetadata {
@@ -25,6 +139,7 @@ impl Clone for ModelMetadata {
             ordering: self.ordering.clone(),
             verbose_name: self.verbose_name.clone(),
             verbose_name_plural: self.verbose_name_plural.clone(),
+            options: self.options.clone(),
         }
     }
 }
@@ -94,6 +209,7 @@ impl ModelBuilder {
             ordering: None,
             verbose_name: verbose.clone(),
             verbose_name_plural: format!("{}s", verbose),
+            options: Options::default(),
         }
     }
 }
@@ -114,6 +230,7 @@ mod tests {
             ordering: None,
             verbose_name: "article".to_string(),
             verbose_name_plural: "articles".to_string(),
+            options: Options::default(),
         };
         assert_eq!(meta.app_label, "blog");
         assert_eq!(meta.model_name, "Article");

@@ -42,22 +42,151 @@ impl View for TemplateView {
 }
 
 /// ── RedirectView ──────────────────────────────────────────────────────
-/// Redirects to a URL.
+/// Redirects to a URL. Builder-style configuration.
+/// Does NOT implement the View trait; use `.view()` instead.
 pub struct RedirectView {
-    pub url: String,
+    pub url: Option<String>,
+    pub pattern_name: Option<String>,
     pub permanent: bool,
-    pub query_string: bool,
 }
 
 impl RedirectView {
-    pub fn new(url: &str) -> Self {
-        Self { url: url.to_string(), permanent: false, query_string: false }
+    pub fn new() -> Self {
+        Self { url: None, pattern_name: None, permanent: false }
+    }
+
+    pub fn url(mut self, url: &str) -> Self {
+        self.url = Some(url.to_string());
+        self
+    }
+
+    pub fn pattern_name(mut self, name: &str) -> Self {
+        self.pattern_name = Some(name.to_string());
+        self
+    }
+
+    pub fn permanent(mut self, val: bool) -> Self {
+        self.permanent = val;
+        self
+    }
+
+    pub fn get_redirect_url(&self, _kwargs: &HashMap<String, String>) -> Option<String> {
+        self.url.clone()
+    }
+
+    pub fn view(&self, _request: &Request) -> Response {
+        let redirect_url = self.get_redirect_url(&HashMap::new());
+        match redirect_url {
+            Some(url) => Response::redirect(&url, self.permanent),
+            None => Response::html("No redirect URL configured".to_string()),
+        }
     }
 }
 
-impl View for RedirectView {
-    fn call(&self, _request: Request) -> Response {
-        Response::redirect(&self.url, self.permanent)
+/// ── ContextMixin ──────────────────────────────────────────────────────
+/// Provides get_context_data for views. Simplified placeholder.
+pub struct ContextMixin;
+
+impl ContextMixin {
+    pub fn get_context_data(&self) -> HashMap<String, String> {
+        HashMap::new()
+    }
+}
+
+/// ── TemplateResponseMixin ────────────────────────────────────────────
+/// Provides render_to_response for template-based views.
+pub struct TemplateResponseMixin;
+
+impl TemplateResponseMixin {
+    pub fn render_to_response(&self, context: HashMap<String, String>, template_name: &str) -> Response {
+        let context_str = context.iter()
+            .map(|(k, v)| format!("<li><strong>{}</strong>: {}</li>", k, v))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let content = format!(
+            "<!DOCTYPE html><html><head><title>{}</title></head><body>\
+             <h1>Rendered via TemplateResponseMixin</h1>\
+             <ul>{}</ul>\
+             </body></html>",
+            template_name, context_str
+        );
+        Response::html(content)
+    }
+}
+
+/// ── MultipleObjectMixin ──────────────────────────────────────────────
+/// Provides queryset handling for list views.
+pub struct MultipleObjectMixin {
+    pub queryset: Vec<HashMap<String, serde_json::Value>>,
+    pub paginate_by: Option<usize>,
+}
+
+impl MultipleObjectMixin {
+    pub fn new() -> Self {
+        Self { queryset: Vec::new(), paginate_by: None }
+    }
+
+    pub fn get_queryset(&self) -> &[HashMap<String, serde_json::Value>] {
+        &self.queryset
+    }
+
+    pub fn get_context_data(&self, _kwargs: HashMap<String, String>) -> HashMap<String, String> {
+        let mut ctx = _kwargs;
+        ctx.insert("paginate_by".into(), self.paginate_by.map(|p| p.to_string()).unwrap_or_default());
+        ctx
+    }
+}
+
+/// ── SingleObjectMixin ────────────────────────────────────────────────
+/// Provides object retrieval for detail views.
+pub struct SingleObjectMixin {
+    pub pk_url_kwarg: String,
+}
+
+impl SingleObjectMixin {
+    pub fn new() -> Self {
+        Self { pk_url_kwarg: "pk".into() }
+    }
+
+    pub fn get_object(&self, _queryset: &[HashMap<String, serde_json::Value>]) -> Option<HashMap<String, serde_json::Value>> {
+        _queryset.first().cloned()
+    }
+
+    pub fn get_context_data(&self, _kwargs: HashMap<String, String>) -> HashMap<String, String> {
+        _kwargs
+    }
+}
+
+/// ── FormMixin ────────────────────────────────────────────────────────
+/// Provides form handling for form views.
+pub struct FormMixin {
+    pub success_url: Option<String>,
+    pub initial: HashMap<String, String>,
+}
+
+impl FormMixin {
+    pub fn new() -> Self {
+        Self { success_url: None, initial: HashMap::new() }
+    }
+
+    pub fn get_form(&self, _form_class: &str) -> String {
+        _form_class.to_string()
+    }
+
+    pub fn get_success_url(&self) -> Option<&str> {
+        self.success_url.as_deref()
+    }
+
+    pub fn form_valid(&self) -> Response {
+        match &self.success_url {
+            Some(url) => Response::redirect(url, false),
+            None => Response::html("Form valid (no success URL)".to_string()),
+        }
+    }
+
+    pub fn form_invalid(&self) -> Response {
+        let content = "<html><body><h1>Form Invalid</h1><ul><li>Errors present</li></ul></body></html>".to_string();
+        Response::html(content)
     }
 }
 
@@ -303,8 +432,8 @@ mod tests {
 
     #[test]
     fn test_redirect_view() {
-        let view = RedirectView::new("/login/");
-        let resp = view.call(Request::new(HttpMethod::GET, "/old/"));
+        let view = RedirectView::new().url("/login/");
+        let resp = view.view(&Request::new(HttpMethod::GET, "/old/"));
         assert_eq!(resp.status_code(), 302);
     }
 
@@ -389,11 +518,131 @@ mod tests {
 
     #[test]
     fn test_redirect_view_permanent() {
-        let mut view = RedirectView::new("/new/");
-        view.permanent = true;
-        let resp = view.call(Request::new(HttpMethod::GET, "/old/"));
+        let view = RedirectView::new().url("/new/").permanent(true);
+        let resp = view.view(&Request::new(HttpMethod::GET, "/old/"));
         assert_eq!(resp.status_code(), 301);
         assert_eq!(resp.header("Location"), Some("/new/"));
+    }
+
+    #[test]
+    fn test_redirect_view_no_url() {
+        let view = RedirectView::new();
+        let resp = view.view(&Request::new(HttpMethod::GET, "/old/"));
+        assert_eq!(resp.status_code(), 200);
+        assert!(resp.body_str().contains("No redirect URL configured"));
+    }
+
+    #[test]
+    fn test_redirect_view_builder_pattern() {
+        let view = RedirectView::new()
+            .url("/target/")
+            .pattern_name("my-view")
+            .permanent(true);
+        assert_eq!(view.url, Some("/target/".to_string()));
+        assert_eq!(view.pattern_name, Some("my-view".to_string()));
+        assert!(view.permanent);
+    }
+
+    #[test]
+    fn test_redirect_view_get_redirect_url() {
+        let view = RedirectView::new().url("/somewhere/");
+        let url = view.get_redirect_url(&HashMap::new());
+        assert_eq!(url, Some("/somewhere/".to_string()));
+    }
+
+    #[test]
+    fn test_context_mixin() {
+        let mixin = ContextMixin;
+        let ctx = mixin.get_context_data();
+        assert!(ctx.is_empty());
+    }
+
+    #[test]
+    fn test_template_response_mixin() {
+        let mixin = TemplateResponseMixin;
+        let mut ctx = HashMap::new();
+        ctx.insert("key".into(), "value".into());
+        let resp = mixin.render_to_response(ctx, "index.html");
+        assert!(resp.body_str().contains("Rendered via TemplateResponseMixin"));
+        assert!(resp.body_str().contains("index.html"));
+        assert!(resp.body_str().contains("key"));
+        assert!(resp.body_str().contains("value"));
+        assert_eq!(resp.status_code(), 200);
+    }
+
+    #[test]
+    fn test_multiple_object_mixin() {
+        let mixin = MultipleObjectMixin::new();
+        assert!(mixin.get_queryset().is_empty());
+        assert_eq!(mixin.paginate_by, None);
+    }
+
+    #[test]
+    fn test_multiple_object_mixin_context() {
+        let mixin = MultipleObjectMixin {
+            queryset: Vec::new(),
+            paginate_by: Some(25),
+        };
+        let ctx = mixin.get_context_data(HashMap::new());
+        assert_eq!(ctx.get("paginate_by"), Some(&"25".to_string()));
+    }
+
+    #[test]
+    fn test_single_object_mixin() {
+        let mixin = SingleObjectMixin::new();
+        let obj = mixin.get_object(&[]);
+        assert!(obj.is_none());
+    }
+
+    #[test]
+    fn test_single_object_mixin_with_data() {
+        let mixin = SingleObjectMixin::new();
+        let mut data = HashMap::new();
+        data.insert("id".into(), serde_json::Value::Number(1.into()));
+        let obj = mixin.get_object(&[data]);
+        assert!(obj.is_some());
+        assert_eq!(obj.unwrap().get("id").and_then(|v| v.as_u64()), Some(1));
+    }
+
+    #[test]
+    fn test_form_mixin_get_form() {
+        let mixin = FormMixin::new();
+        let form = mixin.get_form("ContactForm");
+        assert_eq!(form, "ContactForm");
+    }
+
+    #[test]
+    fn test_form_mixin_form_valid() {
+        let mixin = FormMixin {
+            success_url: Some("/done/".into()),
+            initial: HashMap::new(),
+        };
+        let resp = mixin.form_valid();
+        assert_eq!(resp.status_code(), 302);
+        assert_eq!(resp.header("Location"), Some("/done/"));
+    }
+
+    #[test]
+    fn test_form_mixin_form_invalid() {
+        let mixin = FormMixin::new();
+        let resp = mixin.form_invalid();
+        assert!(resp.body_str().contains("Form Invalid"));
+        assert_eq!(resp.status_code(), 200);
+    }
+
+    #[test]
+    fn test_form_mixin_get_success_url() {
+        let mixin = FormMixin {
+            success_url: Some("/thanks/".into()),
+            initial: HashMap::new(),
+        };
+        assert_eq!(mixin.get_success_url(), Some("/thanks/"));
+    }
+
+    #[test]
+    fn test_form_mixin_no_success_url() {
+        let mixin = FormMixin::new();
+        assert_eq!(mixin.get_success_url(), None);
     }
 
     #[test]

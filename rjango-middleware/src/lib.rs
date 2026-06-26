@@ -23,6 +23,9 @@ pub mod session;
 pub mod messages;
 pub mod clickjacking;
 pub mod common;
+pub mod gzip;
+pub mod conditional_get;
+pub mod locale;
 
 /// Middleware stack — applies all middleware in order.
 pub struct MiddlewareStack {

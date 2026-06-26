@@ -1,6 +1,7 @@
 //! rjango-dispatch — Signal dispatcher (mirrors `django.dispatch`).
 //! Re-exports and wraps rjango-core signal infrastructure.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use rjango_core::signals;
 
@@ -19,12 +20,16 @@ impl Signal {
     where
         F: Fn(&dyn std::any::Any) + Send + Sync + 'static,
     {
-        self.inner.connect(f);
+        self.inner.connect(move |kwargs: &HashMap<String, String>| {
+            f(kwargs as &dyn std::any::Any);
+        });
     }
 
     /// Send a signal.
     pub fn send(&self, sender: &dyn std::any::Any) {
-        self.inner.send(sender);
+        if let Some(kwargs) = sender.downcast_ref::<HashMap<String, String>>() {
+            self.inner.send(kwargs);
+        }
     }
 
     /// Get the inner signal name.
@@ -93,7 +98,29 @@ mod tests {
             r.store(true, Ordering::SeqCst);
         });
 
-        sig.send(&"hello");
+        let mut kwargs = HashMap::new();
+        kwargs.insert("action".to_string(), "test".to_string());
+        sig.send(&kwargs);
+        assert!(received.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_connect_and_send_any() {
+        let sig = Signal::new("test_connect_any");
+        let received = Arc::new(AtomicBool::new(false));
+        let r = received.clone();
+
+        sig.connect(move |sender| {
+            if let Some(kwargs) = (sender as &dyn Any).downcast_ref::<HashMap<String, String>>() {
+                if kwargs.get("action").map(|s| s.as_str()) == Some("test") {
+                    r.store(true, Ordering::SeqCst);
+                }
+            }
+        });
+
+        let mut kwargs = HashMap::new();
+        kwargs.insert("action".to_string(), "test".to_string());
+        sig.send(&kwargs);
         assert!(received.load(Ordering::SeqCst));
     }
 
@@ -109,23 +136,27 @@ mod tests {
     #[test]
     fn test_send_no_receivers() {
         let sig = Signal::new("orphan");
-        sig.send(&"should not panic");
+        sig.send(&HashMap::<String, String>::new());
         // If we reach here, no crash
     }
 
     #[test]
-    fn test_send_with_int_sender() {
-        let sig = Signal::new("int_sender");
+    fn test_send_with_kwargs() {
+        let sig = Signal::new("kw_sender");
         let received = Arc::new(AtomicBool::new(false));
         let r = received.clone();
         sig.connect(move |sender| {
-            if let Some(val) = (sender as &dyn Any).downcast_ref::<i32>() {
-                if *val == 42 {
-                    r.store(true, Ordering::SeqCst);
+            if let Some(kwargs) = (sender as &dyn Any).downcast_ref::<HashMap<String, String>>() {
+                if let Some(val) = kwargs.get("key") {
+                    if val == "42" {
+                        r.store(true, Ordering::SeqCst);
+                    }
                 }
             }
         });
-        sig.send(&42);
+        let mut kwargs = HashMap::new();
+        kwargs.insert("key".to_string(), "42".to_string());
+        sig.send(&kwargs);
         assert!(received.load(Ordering::SeqCst));
     }
 
@@ -137,7 +168,7 @@ mod tests {
         let c2 = counter.clone();
         sig.connect(move |_| { c1.fetch_add(1, Ordering::SeqCst); });
         sig.connect(move |_| { c2.fetch_add(1, Ordering::SeqCst); });
-        sig.send(&"ping");
+        sig.send(&HashMap::<String, String>::new());
         assert_eq!(counter.load(Ordering::SeqCst), 2);
     }
 
@@ -162,16 +193,20 @@ mod tests {
     }
 
     #[test]
-    fn test_signal_sends_string_sender() {
-        let sig = Signal::new("string_sender");
+    fn test_signal_sends_with_kwargs() {
+        let sig = Signal::new("kw_sender");
         let val = Arc::new(std::sync::Mutex::new(String::new()));
         let v = val.clone();
         sig.connect(move |sender| {
-            if let Some(s) = (sender as &dyn Any).downcast_ref::<String>() {
-                *v.lock().unwrap() = s.clone();
+            if let Some(kwargs) = (sender as &dyn Any).downcast_ref::<HashMap<String, String>>() {
+                if let Some(s) = kwargs.get("msg") {
+                    *v.lock().unwrap() = s.clone();
+                }
             }
         });
-        sig.send(&"hello".to_string());
+        let mut kwargs = HashMap::new();
+        kwargs.insert("msg".to_string(), "hello".to_string());
+        sig.send(&kwargs);
         assert_eq!(*val.lock().unwrap(), "hello");
     }
 

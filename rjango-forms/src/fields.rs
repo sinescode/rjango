@@ -40,11 +40,25 @@ impl FormField {
             FieldType::Float => super::widgets::WidgetType::NumberInput,
             FieldType::Boolean => super::widgets::WidgetType::CheckboxInput,
             FieldType::Choice(_) => super::widgets::WidgetType::Select(vec![]),
+            FieldType::MultipleChoice(_) => super::widgets::WidgetType::SelectMultiple(vec![]),
             FieldType::TextArea => super::widgets::WidgetType::Textarea,
             FieldType::Date => super::widgets::WidgetType::DateInput,
             FieldType::DateTime => super::widgets::WidgetType::DateTimeInput,
+            FieldType::Time => super::widgets::WidgetType::TimeInput,
+            FieldType::Duration => super::widgets::WidgetType::TextInput,
+            FieldType::Decimal => super::widgets::WidgetType::NumberInput,
+            FieldType::Regex => super::widgets::WidgetType::TextInput,
+            FieldType::Slug => super::widgets::WidgetType::TextInput,
+            FieldType::UUID => super::widgets::WidgetType::TextInput,
+            FieldType::IpAddress => super::widgets::WidgetType::TextInput,
+            FieldType::URL => super::widgets::WidgetType::URLInput,
+            FieldType::NullBoolean => super::widgets::WidgetType::NullBooleanSelect,
             FieldType::Hidden => super::widgets::WidgetType::HiddenInput,
             FieldType::File => super::widgets::WidgetType::FileInput,
+            FieldType::Image => super::widgets::WidgetType::FileInput,
+            FieldType::SplitDateTime => super::widgets::WidgetType::SplitDateTimeInput,
+            FieldType::TypedChoice(_) => super::widgets::WidgetType::Select(vec![]),
+            FieldType::TypedMultipleChoice(_) => super::widgets::WidgetType::SelectMultiple(vec![]),
         };
         Self {
             name: name.to_string(),
@@ -81,6 +95,12 @@ impl FormField {
                     .map(|n| Value::Number(serde_json::Number::from(n as u64)))
                     .map_err(|_| format!("{} must be an integer.", self.label))
             }
+            FieldType::Decimal => {
+                let s = value.as_str().unwrap_or("");
+                s.parse::<f64>()
+                    .map(|n| serde_json::Number::from_f64(n).map(Value::Number).unwrap_or(Value::Null))
+                    .map_err(|_| format!("{} must be a decimal number.", self.label))
+            }
             FieldType::Float => {
                 let s = value.as_str().unwrap_or("");
                 s.parse::<f64>()
@@ -94,7 +114,75 @@ impl FormField {
                     _ => Err(format!("{} must be true or false.", self.label)),
                 }
             }
-            _ => Ok(value.clone()),
+            FieldType::NullBoolean => {
+                match value.as_str().unwrap_or("").to_lowercase().as_str() {
+                    "true" | "1" | "on" | "yes" => Ok(Value::Bool(true)),
+                    "false" | "0" | "off" | "no" => Ok(Value::Bool(false)),
+                    _ => Ok(Value::Null),
+                }
+            }
+            FieldType::Email => {
+                let s = value.as_str().unwrap_or("");
+                if s.contains('@') && s.contains('.') {
+                    Ok(value.clone())
+                } else {
+                    Err(format!("{} must be a valid email.", self.label))
+                }
+            }
+            FieldType::URL => {
+                let s = value.as_str().unwrap_or("");
+                if s.starts_with("http://") || s.starts_with("https://") || s.starts_with("/") {
+                    Ok(value.clone())
+                } else {
+                    Err(format!("{} must be a valid URL.", self.label))
+                }
+            }
+            FieldType::Slug => {
+                let s = value.as_str().unwrap_or("");
+                if s.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+                    Ok(value.clone())
+                } else {
+                    Err(format!("{} must be a valid slug.", self.label))
+                }
+            }
+            FieldType::UUID => {
+                let s = value.as_str().unwrap_or("");
+                let clean = s.replace('-', "");
+                if clean.len() == 32 && clean.chars().all(|c| c.is_ascii_hexdigit()) {
+                    Ok(value.clone())
+                } else {
+                    Err(format!("{} must be a valid UUID.", self.label))
+                }
+            }
+            FieldType::IpAddress => {
+                let s = value.as_str().unwrap_or("");
+                if s.contains(':') || s.chars().filter(|&c| c == '.').count() == 3 {
+                    Ok(value.clone())
+                } else {
+                    Err(format!("{} must be a valid IP address.", self.label))
+                }
+            }
+            FieldType::Regex => {
+                let _ = value.as_str().unwrap_or("");
+                // Accept any string as regex; actual validation via validators
+                Ok(value.clone())
+            }
+            FieldType::Choice(_) | FieldType::TypedChoice(_) | FieldType::TypedMultipleChoice(_) | FieldType::MultipleChoice(_) => {
+                let s = value.as_str().unwrap_or("");
+                // Check if value is in choices
+                let allowed: Vec<&str> = match &self.field_type {
+                    FieldType::Choice(c) | FieldType::TypedChoice(c) | FieldType::TypedMultipleChoice(c) | FieldType::MultipleChoice(c) => {
+                        c.iter().map(|(v, _)| v.as_str()).collect()
+                    }
+                    _ => vec![],
+                };
+                if allowed.is_empty() || allowed.contains(&s) || s.is_empty() {
+                    Ok(value.clone())
+                } else {
+                    Err(format!("{} select a valid choice. {} is not available.", self.label, s))
+                }
+            }
+            _ => Ok(value.clone()), // Char, Password, TextArea, Date, DateTime, Time, Duration, Hidden, File, Image, SplitDateTime
         }
     }
 
@@ -130,11 +218,25 @@ pub enum FieldType {
     Float,
     Boolean,
     Choice(Vec<(String, String)>),
+    MultipleChoice(Vec<(String, String)>),
     TextArea,
     Date,
     DateTime,
+    Time,
+    Duration,
+    Decimal,
+    Regex,
+    Slug,
+    UUID,
+    IpAddress,
+    URL,
+    NullBoolean,
     Hidden,
     File,
+    Image,
+    SplitDateTime,
+    TypedChoice(Vec<(String, String)>),
+    TypedMultipleChoice(Vec<(String, String)>),
 }
 
 #[cfg(test)]
@@ -251,5 +353,71 @@ mod tests {
         let field = FormField::new("flag", FieldType::Boolean);
         assert_eq!(field.clean(&Value::String("1".into())).unwrap(), Value::Bool(true));
         assert_eq!(field.clean(&Value::String("0".into())).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn test_clean_email_valid() {
+        let field = FormField::new("email", FieldType::Email);
+        assert!(field.clean(&Value::String("user@example.com".into())).is_ok());
+    }
+
+    #[test]
+    fn test_clean_email_invalid() {
+        let field = FormField::new("email", FieldType::Email);
+        assert!(field.clean(&Value::String("notanemail".into())).is_err());
+    }
+
+    #[test]
+    fn test_clean_url_valid() {
+        let field = FormField::new("url", FieldType::URL);
+        assert!(field.clean(&Value::String("https://example.com".into())).is_ok());
+    }
+
+    #[test]
+    fn test_clean_url_invalid() {
+        let field = FormField::new("url", FieldType::URL);
+        assert!(field.clean(&Value::String("not-a-url".into())).is_err());
+    }
+
+    #[test]
+    fn test_clean_slug_valid() {
+        let field = FormField::new("slug", FieldType::Slug);
+        assert!(field.clean(&Value::String("hello-world".into())).is_ok());
+    }
+
+    #[test]
+    fn test_clean_slug_invalid() {
+        let field = FormField::new("slug", FieldType::Slug);
+        assert!(field.clean(&Value::String("hello world!".into())).is_err());
+    }
+
+    #[test]
+    fn test_clean_uuid_valid() {
+        let field = FormField::new("id", FieldType::UUID);
+        assert!(field.clean(&Value::String("550e8400-e29b-41d4-a716-446655440000".into())).is_ok());
+    }
+
+    #[test]
+    fn test_clean_uuid_invalid() {
+        let field = FormField::new("id", FieldType::UUID);
+        assert!(field.clean(&Value::String("not-a-uuid".into())).is_err());
+    }
+
+    #[test]
+    fn test_clean_null_boolean_true() {
+        let field = FormField::new("flag", FieldType::NullBoolean);
+        assert_eq!(field.clean(&Value::String("true".into())).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn test_clean_null_boolean_empty() {
+        let field = FormField::new("flag", FieldType::NullBoolean);
+        assert_eq!(field.clean(&Value::String(" ".into())).unwrap(), Value::Null);
+    }
+
+    #[test]
+    fn test_decimal_field_widget() {
+        let field = FormField::new("price", FieldType::Decimal);
+        assert!(matches!(field.widget, crate::widgets::WidgetType::NumberInput));
     }
 }

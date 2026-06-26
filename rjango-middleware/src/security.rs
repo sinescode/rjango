@@ -1,14 +1,16 @@
+/// SecurityMiddleware — security headers.
+/// Mirrors `django.middleware.security.SecurityMiddleware`.
 use rjango_core::{Request, Response, RjangoError};
-use super::Middleware;
+use crate::Middleware;
 
-/// Security middleware — sets security-related HTTP headers.
 pub struct SecurityMiddleware;
 
 impl Middleware for SecurityMiddleware {
-    fn process_response(&self, _request: &Request, response: &mut Response) -> std::result::Result<(), RjangoError> {
-        response.headers.entry("x-content-type-options".into()).or_insert_with(|| "nosniff".into());
-        response.headers.entry("x-frame-options".into()).or_insert_with(|| "DENY".into());
-        response.headers.entry("x-xss-protection".into()).or_insert_with(|| "1; mode=block".into());
+    fn process_response(&self, _request: &Request, response: &mut Response) -> Result<(), RjangoError> {
+        response.headers.insert("x-content-type-options".into(), "nosniff".into());
+        response.headers.insert("x-frame-options".into(), "DENY".into());
+        response.headers.insert("referrer-policy".into(), "same-origin".into());
+        response.headers.insert("cross-origin-opener-policy".into(), "same-origin".into());
         Ok(())
     }
 }
@@ -16,15 +18,16 @@ impl Middleware for SecurityMiddleware {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rjango_core::HttpMethod;
+    use rjango_core::{HttpMethod, Request, Response};
 
     #[test]
     fn test_security_headers() {
+        let req = rjango_core::Request::new(rjango_core::HttpMethod::GET, "/");
+        let mut res = Response::html("<html></html>");
         let mw = SecurityMiddleware;
-        let mut resp = Response::html("test");
-        let req = Request::new(HttpMethod::GET, "/");
-        mw.process_response(&req, &mut resp).unwrap();
-        assert_eq!(resp.header("x-content-type-options"), Some("nosniff"));
-        assert_eq!(resp.header("x-frame-options"), Some("DENY"));
+        mw.process_response(&req, &mut res).unwrap();
+        assert_eq!(res.header("x-content-type-options"), Some("nosniff"));
+        assert_eq!(res.header("x-frame-options"), Some("DENY"));
+        assert_eq!(res.header("referrer-policy"), Some("same-origin"));
     }
 }

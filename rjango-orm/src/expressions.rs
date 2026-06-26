@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use serde_json;
+
 /// Q() object — complex query conditions (like Django's `django.db.models.Q`).
 /// Supports AND (`&`), OR (`|`), NOT (`~`) operations.
 #[derive(Debug, Clone)]
@@ -150,11 +152,11 @@ pub fn q(field: &str, value: &str) -> Q {
 /// Aggregate expression — like Django's `django.db.models.aggregates`.
 #[derive(Debug, Clone)]
 pub enum Aggregate {
-    Sum(Expression),
-    Count(Expression),
-    Avg(Expression),
-    Min(Expression),
-    Max(Expression),
+    Sum(SqlExpression),
+    Count(SqlExpression),
+    Avg(SqlExpression),
+    Min(SqlExpression),
+    Max(SqlExpression),
 }
 
 impl Aggregate {
@@ -169,50 +171,50 @@ impl Aggregate {
     }
 }
 
-pub fn sum(expr: Expression) -> Aggregate { Aggregate::Sum(expr) }
-pub fn count(expr: Expression) -> Aggregate { Aggregate::Count(expr) }
-pub fn avg(expr: Expression) -> Aggregate { Aggregate::Avg(expr) }
-pub fn min(expr: Expression) -> Aggregate { Aggregate::Min(expr) }
-pub fn max(expr: Expression) -> Aggregate { Aggregate::Max(expr) }
+pub fn sum(expr: SqlExpression) -> Aggregate { Aggregate::Sum(expr) }
+pub fn count(expr: SqlExpression) -> Aggregate { Aggregate::Count(expr) }
+pub fn avg(expr: SqlExpression) -> Aggregate { Aggregate::Avg(expr) }
+pub fn min(expr: SqlExpression) -> Aggregate { Aggregate::Min(expr) }
+pub fn max(expr: SqlExpression) -> Aggregate { Aggregate::Max(expr) }
 
-/// A database expression that can be rendered as SQL.
+/// A database sql expression that can be rendered as SQL.
 #[derive(Debug, Clone)]
-pub enum Expression {
+pub enum SqlExpression {
     /// Column reference: `"table"."column"`
     Column { table: Option<String>, name: String },
     /// Value literal
     Value(String),
     /// SQL function call
-    Function { name: String, args: Vec<Expression>, alias: Option<String> },
+    Function { name: String, args: Vec<SqlExpression>, alias: Option<String> },
     /// Raw SQL expression
     Raw(String),
     /// Combined with AND
-    And(Box<Expression>, Box<Expression>),
+    And(Box<SqlExpression>, Box<SqlExpression>),
     /// Combined with OR
-    Or(Box<Expression>, Box<Expression>),
+    Or(Box<SqlExpression>, Box<SqlExpression>),
     /// Negation
-    Not(Box<Expression>),
+    Not(Box<SqlExpression>),
 }
 
-impl Expression {
+impl SqlExpression {
     /// Render the expression as SQL.
     pub fn to_sql(&self) -> String {
         match self {
-            Expression::Column { table, name } => {
+            SqlExpression::Column { table, name } => {
                 if let Some(t) = table {
                     format!("\"{}\".\"{}\"", t, name)
                 } else {
                     format!("\"{}\"", name)
                 }
             }
-            Expression::Value(v) => {
+            SqlExpression::Value(v) => {
                 if v == "NULL" {
                     "NULL".into()
                 } else {
                     format!("'{}'", v.replace('\'', "''"))
                 }
             }
-            Expression::Function { name, args, alias } => {
+            SqlExpression::Function { name, args, alias } => {
                 let args_sql: Vec<String> = args.iter().map(|a| a.to_sql()).collect();
                 let mut sql = format!("{}({})", name.to_uppercase(), args_sql.join(", "));
                 if let Some(a) = alias {
@@ -220,10 +222,10 @@ impl Expression {
                 }
                 sql
             }
-            Expression::Raw(s) => s.clone(),
-            Expression::And(a, b) => format!("({} AND {})", a.to_sql(), b.to_sql()),
-            Expression::Or(a, b) => format!("({} OR {})", a.to_sql(), b.to_sql()),
-            Expression::Not(e) => format!("NOT ({})", e.to_sql()),
+            SqlExpression::Raw(s) => s.clone(),
+            SqlExpression::And(a, b) => format!("({} AND {})", a.to_sql(), b.to_sql()),
+            SqlExpression::Or(a, b) => format!("({} OR {})", a.to_sql(), b.to_sql()),
+            SqlExpression::Not(e) => format!("NOT ({})", e.to_sql()),
         }
     }
 }
@@ -231,8 +233,8 @@ impl Expression {
 // ── Database Functions (like Django's django.db.models.functions) ──
 
 /// `NOW()` — current timestamp (like Django's `Now`).
-pub fn now() -> Expression {
-    Expression::Function {
+pub fn now() -> SqlExpression {
+    SqlExpression::Function {
         name: "NOW".into(),
         args: vec![],
         alias: None,
@@ -240,13 +242,13 @@ pub fn now() -> Expression {
 }
 
 /// `CAST(expr AS type)` — type cast (like Django's `Cast`).
-pub fn cast(expr: Expression, sql_type: &str) -> Expression {
-    Expression::Raw(format!("CAST({} AS {})", expr.to_sql(), sql_type))
+pub fn cast(expr: SqlExpression, sql_type: &str) -> SqlExpression {
+    SqlExpression::Raw(format!("CAST({} AS {})", expr.to_sql(), sql_type))
 }
 
 /// `COALESCE(expr1, expr2, ...)` — first non-null (like Django's `Coalesce`).
-pub fn coalesce(args: Vec<Expression>) -> Expression {
-    Expression::Function {
+pub fn coalesce(args: Vec<SqlExpression>) -> SqlExpression {
+    SqlExpression::Function {
         name: "COALESCE".into(),
         args,
         alias: None,
@@ -254,8 +256,8 @@ pub fn coalesce(args: Vec<Expression>) -> Expression {
 }
 
 /// `LENGTH(expr)` — string length (like Django's `Length`).
-pub fn length(expr: Expression) -> Expression {
-    Expression::Function {
+pub fn length(expr: SqlExpression) -> SqlExpression {
+    SqlExpression::Function {
         name: "LENGTH".into(),
         args: vec![expr],
         alias: None,
@@ -263,8 +265,8 @@ pub fn length(expr: Expression) -> Expression {
 }
 
 /// `LOWER(expr)` — lowercase (like Django's `Lower`).
-pub fn lower(expr: Expression) -> Expression {
-    Expression::Function {
+pub fn lower(expr: SqlExpression) -> SqlExpression {
+    SqlExpression::Function {
         name: "LOWER".into(),
         args: vec![expr],
         alias: None,
@@ -272,8 +274,8 @@ pub fn lower(expr: Expression) -> Expression {
 }
 
 /// `UPPER(expr)` — uppercase (like Django's `Upper`).
-pub fn upper(expr: Expression) -> Expression {
-    Expression::Function {
+pub fn upper(expr: SqlExpression) -> SqlExpression {
+    SqlExpression::Function {
         name: "UPPER".into(),
         args: vec![expr],
         alias: None,
@@ -281,12 +283,12 @@ pub fn upper(expr: Expression) -> Expression {
 }
 
 /// `SUBSTR(expr, start, length)` — substring (like Django's `Substr`).
-pub fn substr(expr: Expression, start: i32, length: Option<i32>) -> Expression {
-    let mut args = vec![expr, Expression::Value(start.to_string())];
+pub fn substr(expr: SqlExpression, start: i32, length: Option<i32>) -> SqlExpression {
+    let mut args = vec![expr, SqlExpression::Value(start.to_string())];
     if let Some(len) = length {
-        args.push(Expression::Value(len.to_string()));
+        args.push(SqlExpression::Value(len.to_string()));
     }
-    Expression::Function {
+    SqlExpression::Function {
         name: "SUBSTR".into(),
         args,
         alias: None,
@@ -294,8 +296,8 @@ pub fn substr(expr: Expression, start: i32, length: Option<i32>) -> Expression {
 }
 
 /// `TRIM(expr)` — trim whitespace (like Django's `Trim`).
-pub fn trim(expr: Expression) -> Expression {
-    Expression::Function {
+pub fn trim(expr: SqlExpression) -> SqlExpression {
+    SqlExpression::Function {
         name: "TRIM".into(),
         args: vec![expr],
         alias: None,
@@ -303,8 +305,8 @@ pub fn trim(expr: Expression) -> Expression {
 }
 
 /// `CONCAT(expr1, expr2, ...)` — string concatenation (like Django's `Concat`).
-pub fn concat(args: Vec<Expression>) -> Expression {
-    Expression::Function {
+pub fn concat(args: Vec<SqlExpression>) -> SqlExpression {
+    SqlExpression::Function {
         name: "CONCAT".into(),
         args,
         alias: None,
@@ -312,40 +314,118 @@ pub fn concat(args: Vec<Expression>) -> Expression {
 }
 
 /// Column reference helper.
-pub fn col(name: &str) -> Expression {
-    Expression::Column { table: None, name: name.into() }
+pub fn col(name: &str) -> SqlExpression {
+    SqlExpression::Column { table: None, name: name.into() }
 }
 
 /// Column reference with table.
-pub fn col_table(table: &str, name: &str) -> Expression {
-    Expression::Column { table: Some(table.into()), name: name.into() }
+pub fn col_table(table: &str, name: &str) -> SqlExpression {
+    SqlExpression::Column { table: Some(table.into()), name: name.into() }
 }
 
 /// Raw SQL expression.
-pub fn raw(sql: &str) -> Expression {
-    Expression::Raw(sql.into())
+pub fn raw(sql: &str) -> SqlExpression {
+    SqlExpression::Raw(sql.into())
 }
 
 /// F() expression — references a model field (like Django's `F()`).
-pub struct F {
-    pub name: String,
-}
+pub struct F(pub String);
 
 impl F {
     pub fn new(name: &str) -> Self {
-        Self { name: name.into() }
+        Self(name.into())
     }
 }
 
 impl fmt::Display for F {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "\"{}\"", self.name)
+        write!(f, "\"{}\"", self.0)
     }
 }
 
-impl From<F> for Expression {
+impl From<F> for SqlExpression {
     fn from(f: F) -> Self {
-        Expression::Column { table: None, name: f.name }
+        SqlExpression::Column { table: None, name: f.0 }
+    }
+}
+
+// ── New trait-based Expression system ──
+
+/// Trait for expressions that can render as SQL.
+pub trait Expression: Send {
+    fn as_sql(&self) -> String;
+}
+
+impl Expression for F {
+    fn as_sql(&self) -> String {
+        self.0.clone()
+    }
+}
+
+/// An explicit value expression.
+pub struct Value(pub serde_json::Value);
+
+impl Expression for Value {
+    fn as_sql(&self) -> String {
+        "?".to_string()
+    }
+}
+
+/// COALESCE expression — returns the first non-null value.
+pub struct Coalesce {
+    pub expressions: Vec<Box<dyn Expression>>,
+}
+
+impl Expression for Coalesce {
+    fn as_sql(&self) -> String {
+        let parts: Vec<String> = self.expressions.iter().map(|e| e.as_sql()).collect();
+        format!("COALESCE({})", parts.join(", "))
+    }
+}
+
+/// A single WHEN clause in a CASE expression.
+pub struct When {
+    pub condition: Box<dyn Expression>,
+    pub result: Box<dyn Expression>,
+}
+
+/// A CASE expression with optional default.
+pub enum Conditional {
+    Case(Vec<When>),
+    Default(Box<dyn Expression>),
+}
+
+impl Expression for Conditional {
+    fn as_sql(&self) -> String {
+        match self {
+            Conditional::Case(cases) => {
+                let parts: Vec<String> = cases.iter().map(|w| {
+                    format!("WHEN {} THEN {}", w.condition.as_sql(), w.result.as_sql())
+                }).collect();
+                format!("CASE {}", parts.join(" "))
+            }
+            Conditional::Default(expr) => {
+                format!("DEFAULT {}", expr.as_sql())
+            }
+        }
+    }
+}
+
+/// A subquery expression.
+pub struct Subquery(pub String);
+
+impl Expression for Subquery {
+    fn as_sql(&self) -> String {
+        format!("({})", self.0)
+    }
+}
+
+/// An EXISTS expression wrapping a subquery.
+pub struct Exists(pub String);
+
+impl Expression for Exists {
+    fn as_sql(&self) -> String {
+        format!("EXISTS ({})", self.0)
     }
 }
 
@@ -367,7 +447,7 @@ mod tests {
 
     #[test]
     fn test_coalesce_function() {
-        let sql = coalesce(vec![col("title"), Expression::Value("Untitled".into())]).to_sql();
+        let sql = coalesce(vec![col("title"), SqlExpression::Value("Untitled".into())]).to_sql();
         assert_eq!(sql, r#"COALESCE("title", 'Untitled')"#);
     }
 
@@ -403,7 +483,7 @@ mod tests {
 
     #[test]
     fn test_concat_function() {
-        let sql = concat(vec![col("first_name"), Expression::Value(" ".into()), col("last_name")]).to_sql();
+        let sql = concat(vec![col("first_name"), SqlExpression::Value(" ".into()), col("last_name")]).to_sql();
         assert_eq!(sql, r#"CONCAT("first_name", ' ', "last_name")"#);
     }
 
@@ -421,13 +501,13 @@ mod tests {
 
     #[test]
     fn test_value_expression() {
-        let sql = Expression::Value("hello".into()).to_sql();
+        let sql = SqlExpression::Value("hello".into()).to_sql();
         assert_eq!(sql, "'hello'");
     }
 
     #[test]
     fn test_null_value() {
-        let sql = Expression::Value("NULL".into()).to_sql();
+        let sql = SqlExpression::Value("NULL".into()).to_sql();
         assert_eq!(sql, "NULL");
     }
 
@@ -439,32 +519,32 @@ mod tests {
 
     #[test]
     fn test_and_expression() {
-        let sql = Expression::And(
-            Box::new(Expression::Raw("age > 18".into())),
-            Box::new(Expression::Raw("active = 1".into())),
+        let sql = SqlExpression::And(
+            Box::new(SqlExpression::Raw("age > 18".into())),
+            Box::new(SqlExpression::Raw("active = 1".into())),
         ).to_sql();
         assert_eq!(sql, "(age > 18 AND active = 1)");
     }
 
     #[test]
     fn test_or_expression() {
-        let sql = Expression::Or(
-            Box::new(Expression::Raw("status = 'draft'".into())),
-            Box::new(Expression::Raw("status = 'pending'".into())),
+        let sql = SqlExpression::Or(
+            Box::new(SqlExpression::Raw("status = 'draft'".into())),
+            Box::new(SqlExpression::Raw("status = 'pending'".into())),
         ).to_sql();
         assert_eq!(sql, "(status = 'draft' OR status = 'pending')");
     }
 
     #[test]
     fn test_not_expression() {
-        let sql = Expression::Not(Box::new(Expression::Raw("deleted".into()))).to_sql();
+        let sql = SqlExpression::Not(Box::new(SqlExpression::Raw("deleted".into()))).to_sql();
         assert_eq!(sql, "NOT (deleted)");
     }
 
     #[test]
     fn test_f_expression() {
         let f = F::new("price");
-        let sql: Expression = f.into();
+        let sql: SqlExpression = f.into();
         assert_eq!(sql.to_sql(), r#""price""#);
     }
 
@@ -566,5 +646,76 @@ mod tests {
     fn test_aggregate_max() {
         let agg = max(col("score"));
         assert_eq!(agg.to_sql(), r#"MAX("score")"#);
+    }
+
+    // ── Tests for new trait-based expressions ──
+
+    #[test]
+    fn test_f_trait_expression_as_sql() {
+        let f = F::new("price");
+        assert_eq!(f.as_sql(), "price");
+    }
+
+    #[test]
+    fn test_value_trait_expression_as_sql() {
+        let v = Value(serde_json::Value::String("hello".to_string()));
+        assert_eq!(v.as_sql(), "?");
+    }
+
+    #[test]
+    fn test_value_trait_expression_numeric() {
+        let v = Value(serde_json::json!(42));
+        assert_eq!(v.as_sql(), "?");
+    }
+
+    #[test]
+    fn test_subquery_trait_expression() {
+        let sq = Subquery("SELECT id FROM users".to_string());
+        assert_eq!(sq.as_sql(), "(SELECT id FROM users)");
+    }
+
+    #[test]
+    fn test_exists_trait_expression() {
+        let e = Exists("SELECT 1 FROM users WHERE active = 1".to_string());
+        assert_eq!(e.as_sql(), "EXISTS (SELECT 1 FROM users WHERE active = 1)");
+    }
+
+    #[test]
+    fn test_coalesce_trait_expression() {
+        let coalesce = Coalesce {
+            expressions: vec![
+                Box::new(F::new("title")),
+                Box::new(Value(serde_json::Value::String("Untitled".to_string()))),
+            ],
+        };
+        assert_eq!(coalesce.as_sql(), "COALESCE(title, ?)");
+    }
+
+    #[test]
+    fn test_conditional_case_trait_expression() {
+        let when = When {
+            condition: Box::new(F::new("status")),
+            result: Box::new(Value(serde_json::Value::String("active".to_string()))),
+        };
+        let cond = Conditional::Case(vec![when]);
+        assert_eq!(cond.as_sql(), "CASE WHEN status THEN ?");
+    }
+
+    #[test]
+    fn test_conditional_default_trait_expression() {
+        let cond = Conditional::Default(Box::new(Value(serde_json::json!("fallback"))));
+        assert_eq!(cond.as_sql(), "DEFAULT ?");
+    }
+
+    #[test]
+    fn test_f_trait_send() {
+        fn _assert_send<T: Send>() {}
+        _assert_send::<F>();
+        _assert_send::<Value>();
+        _assert_send::<Coalesce>();
+        _assert_send::<Conditional>();
+        _assert_send::<When>();
+        _assert_send::<Subquery>();
+        _assert_send::<Exists>();
     }
 }

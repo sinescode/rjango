@@ -4,6 +4,9 @@
 use std::sync::{LazyLock, RwLock};
 use crate::resolvers::{URLResolver, ResolverMatch};
 
+/// Script prefix for URL reversal behind a proxy.
+static SCRIPT_PREFIX: LazyLock<RwLock<String>> = LazyLock::new(|| RwLock::new(String::new()));
+
 static URL_CONF: LazyLock<RwLock<Option<URLResolver>>> = LazyLock::new(|| RwLock::new(None));
 
 /// Set the root URL configuration.
@@ -24,6 +27,16 @@ pub fn include(resolver: URLResolver) -> URLResolver {
 /// Clear URL caches.
 pub fn clear_url_caches() {
     *URL_CONF.write().unwrap() = None;
+}
+
+/// Set a script prefix (used behind a proxy).
+pub fn set_script_prefix(prefix: &str) {
+    *SCRIPT_PREFIX.write().unwrap() = prefix.to_string();
+}
+
+/// Get the current script prefix.
+pub fn get_script_prefix() -> String {
+    SCRIPT_PREFIX.read().unwrap().clone()
 }
 
 /// Resolve a URL path to a view.

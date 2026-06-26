@@ -1,6 +1,44 @@
 /// Django-like paginator for splitting query results into pages.
 /// Mirrors `django.core.paginator`.
 
+use std::sync::Arc;
+
+/// Error returned when a page number is out of range.
+#[derive(Debug, Clone)]
+pub struct InvalidPage;
+
+impl std::fmt::Display for InvalidPage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid page")
+    }
+}
+
+impl std::error::Error for InvalidPage {}
+
+/// Error returned when the page number is not an integer.
+#[derive(Debug, Clone)]
+pub struct PageNotAnInteger;
+
+impl std::fmt::Display for PageNotAnInteger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Page not an integer")
+    }
+}
+
+impl std::error::Error for PageNotAnInteger {}
+
+/// Error returned when the page is empty.
+#[derive(Debug, Clone)]
+pub struct EmptyPage;
+
+impl std::fmt::Display for EmptyPage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Empty page")
+    }
+}
+
+impl std::error::Error for EmptyPage {}
+
 #[derive(Debug, Clone)]
 pub struct Paginator {
     count: usize,
@@ -18,6 +56,7 @@ pub struct Page {
     pub start_index: usize,
     pub end_index: usize,
     pub object_list: Vec<String>, // placeholder for actual objects
+    pub paginator: Arc<Paginator>,
 }
 
 impl Paginator {
@@ -67,6 +106,7 @@ impl Paginator {
         }
         // Special case: if count is 0 and first page is allowed
         if self.count == 0 && self.allow_empty_first_page && number == 1 {
+            let paginator = Arc::new(self.clone());
             return Ok(Page {
                 number: 1,
                 has_previous: false,
@@ -75,6 +115,7 @@ impl Paginator {
                 start_index: 0,
                 end_index: 0,
                 object_list: vec![],
+                paginator,
             });
         }
 
@@ -87,6 +128,7 @@ impl Paginator {
                 end_index = self.count;
             }
         }
+        let paginator = Arc::new(self.clone());
         Ok(Page {
             number,
             has_previous: number > 1,
@@ -95,6 +137,7 @@ impl Paginator {
             start_index,
             end_index,
             object_list: vec![],
+            paginator,
         })
     }
 
@@ -105,6 +148,76 @@ impl Paginator {
     pub fn page_items_count(&self, number: usize) -> Option<usize> {
         let page = self.page(number).ok()?;
         Some(page.end_index - page.start_index)
+    }
+
+    /// Get a page (alias for `page()`).
+    pub fn get_page(&self, number: u32) -> std::result::Result<Page, String> {
+        self.page(number as usize)
+    }
+
+    /// Validate and normalize a page number.
+    pub fn validate_number(&self, number: u32) -> u32 {
+        let n = self.num_pages() as u32;
+        if number == 0 || number > n {
+            1
+        } else {
+            number
+        }
+    }
+}
+
+impl Page {
+    /// Returns true if there is a next page.
+    pub fn has_next(&self) -> bool {
+        self.has_next
+    }
+
+    /// Returns true if there is a previous page.
+    pub fn has_previous(&self) -> bool {
+        self.has_previous
+    }
+
+    /// Returns true if there are other pages (previous or next).
+    pub fn has_other_pages(&self) -> bool {
+        self.has_previous || self.has_next
+    }
+
+    /// Returns the next page number, or None if there is no next.
+    pub fn next_page_number(&self) -> Option<u32> {
+        if self.has_next {
+            Some(self.number as u32 + 1)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the previous page number, or None if there is no previous.
+    pub fn previous_page_number(&self) -> Option<u32> {
+        if self.has_previous {
+            Some(self.number as u32 - 1)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the 1-based start index for items on this page.
+    pub fn start_index(&self) -> u32 {
+        self.start_index as u32
+    }
+
+    /// Returns the 1-based end index (exclusive) for items on this page.
+    pub fn end_index(&self) -> u32 {
+        self.end_index as u32
+    }
+
+    /// Returns a reference to the object list.
+    pub fn object_list(&self) -> &[String] {
+        &self.object_list
+    }
+
+    /// Returns a reference to the owning Paginator.
+    pub fn paginator_ref(&self) -> &Paginator {
+        &self.paginator
     }
 }
 
